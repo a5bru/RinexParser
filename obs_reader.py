@@ -20,6 +20,23 @@ from obs_epoch import RinexEpoch
 __updated__ = "2016-11-16"
 
 
+class RinexObsReaderFactory(object):
+    """
+
+    """
+
+    def create_obs_reader_by_version(self, rinex_version=2):
+        if rinex_version == 2:
+            return Rinex2ObsReader
+        elif rinex_version == 3:
+            return Rinex3ObsReader
+        assert rinex_version not in [2, 3]
+
+    def create_osb_reader_by_file(self, rinex_file):
+        pass
+        return Rinex3ObsReader()
+
+
 class Rinex2ObsReader(object):
     """
     classdocs
