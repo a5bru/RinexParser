@@ -10,9 +10,13 @@ cd rinexparser
 make cleanAll
 make prepareVenv
 source env/bin/activate
-make install
+make setupVenv
 make test
 ```
+
+If the test was successfull:
+
+``` python setup.py install ```
 
 # Example
 

@@ -12,7 +12,7 @@ with open('LICENSE') as f:
     license = f.read()
 
 setup(
-    name='rinexParser',
+    name='rinex_parser',
     version='0.1.0',
     description='RinexParser',
     long_description=readme,
