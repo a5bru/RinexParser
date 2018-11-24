@@ -20,6 +20,6 @@ If the test was successfull:
 
 # Example
 
-Please check the file *tests/test_obs_reader.py" for examples
+Please check the file *tests/test_obs_reader.py* for examples
 
 Have Fun!
