@@ -1,18 +1,18 @@
 VIRTUALENV_DIR=env
 
-clean-pyc:
-	find . -name '*.pyc' -exec rm -v --force {} \;
-	find . -name '*.pyo' -exec rm -v --force {} \;
+cleanPYco:
+	find . -name '*.pyc' -exec rm --force {} \;
+	find . -name '*.pyo' -exec rm --force {} \;
 
-clean-build:
+cleanBuild:
 	rm --force --recursive build/
 	rm --force --recursive dist/
 	rm --force --recursive *.egg-info
 
-clean-venv:
-	( \
-		rm -rf $(VIRTUALENV_DIR); \
-	)
+cleanVenv:
+	rm -rf $(VIRTUALENV_DIR)
+
+cleanAll: cleanBuild cleanVenv cleanPYco
 
 isort:
 	sh -c "isort --skip-glob=.tox --recursive . "
@@ -20,16 +20,13 @@ isort:
 lint:
 	flake8 --exclude=.tox
 
-prepare:
+prepareVenv:
 	virtualenv --python=python3 ${VIRTUALENV_DIR}
 
-install:
+setupVenv:
 	pip install -r requirements.txt
 
-init: prepare
-	install
-
-test: clean-pyc
+test: cleanPYco
 	nosetests tests
 
 .PHONY: init test
