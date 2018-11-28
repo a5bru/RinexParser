@@ -7,3 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 0.1.0 - 2018-11-24
 ### Added
 This is the inertial release
+
+## 0.1.4 - 2018-11-28
+### Added
+- Splitting timeseries to hours within method *get_rinex_availability*
+### Updated
+- Restructured folders and files for packaging
