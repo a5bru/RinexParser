@@ -26,8 +26,8 @@ class ObsReaderTestSuite(unittest.TestCase):
             obs_parser = RinexParser(rinex_version=rnx_version, rinex_file=rnx_file)
             obs_parser.run()
             obs_quality = RinexQuality()
-            logger.info(obs_quality.get_rinstat_out(obs_parser.datadict))
-            logger.info(obs_quality.get_rinex_availability(obs_parser.datadict))
+            logger.info("\n\n%s\n" % obs_quality.get_rinstat_out(obs_parser.datadict))
+            logger.info("\n\n%s\n" % obs_quality.get_rinex_availability(obs_parser.datadict))
             logger.debug("-"*80)
 
         l = [

@@ -30,9 +30,11 @@ class RinexQuality(object):
                 "observations" in satellite:
                 for observation in satellite["observations"]:
                     if observation.endswith("_value"):
-                        if observation == observation_descriptor:
+                        if observation == observation_descriptor and \
+                            satellite["observations"][observation] is not None:
                             yield satellite    
-                        elif self.rinex_format == 3 and observation.startswith(observation_descriptor):
+                        elif self.rinex_format == 3 and observation.startswith(observation_descriptor) and \
+                            satellite["observations"][observation] is not None:
                             yield satellite
                             continue       
 
@@ -41,7 +43,6 @@ class RinexQuality(object):
         Checks if epoch suffices validity criterias. Per default these are:
 
         * Satellite System contains is GPS
-        * Contains L1 and L2 observation Types
         * At Least 5 Satellites within each Satellite System
 
         Returns: bool, True, if suffices criterias, else False
@@ -168,7 +169,7 @@ class RinexQuality(object):
         'YYYY-MM-DD;STATION;SECOND_BEGIN;SECOND_END;EPOCH_INTERVAL;SESSION_CODE;IS_ONLINE'
         """
         chkdoy = self.do_prepare_datadict(datadict, gapsize)
-        rinex_v = ""
+        rinex_v = []
         d = {
             "date": chkdoy["date"],
             "station_name": chkdoy["station"],
@@ -176,7 +177,7 @@ class RinexQuality(object):
             "second_until": 1,
             "epoch_interval": chkdoy["epoch_interval"],
             "session_code": 'A',
-            "is_online": True
+            "is_online": 1
         }        
         window_list = []
         window = {"valid_from": chkdoy["epoch_first"], "valid_until": ""}
@@ -192,14 +193,28 @@ class RinexQuality(object):
             w_from_c = datetime.datetime(w_from.year, w_from.month, w_from.day)
             w_until = datetime.datetime.strptime(w["valid_until"], cc.RNX_FORMAT_DATETIME)
             w_until_c = datetime.datetime(w_until.year, w_until.month, w_until.day)
-            d["session_code"] = chr(w_from.hour + 65)
+            w_delta = w_until - w_from
+            w_delta_hours = w_delta.total_seconds()/3600.0
             d["second_from"] = int((w_from - w_from_c).total_seconds())
+            # split by hours, not tested for bigger than daily files
+            i = 0
+            if w_delta_hours > 1:
+                for i in range(int(w_delta_hours)):
+                    d["second_until"] = int((w_from.hour + i+1)*3600 - chkdoy["epoch_interval"])
+                    d["session_code"] = chr(w_from.hour + i + 65)
+                    rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
+                        **d
+                    )
+                    rinex_v.append(rinex_v_i)
+                    d["second_from"] = int(d["second_until"] + chkdoy["epoch_interval"])
+
             d["second_until"] = int((w_until - w_until_c).total_seconds())
+            d["session_code"] = chr(w_from.hour + i + 65)
             rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
             **d
             )
-            rinex_v += "\n{}".format(rinex_v_i)
-        return rinex_v
+            rinex_v.append(rinex_v_i)
+        return "\n".join(rinex_v)
 
     def get_rinstat_out(self, datadict, gapsize=5):
         """

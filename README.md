@@ -18,6 +18,8 @@ If the test was successfull:
 
 ``` python setup.py install ```
 
+Within your program you can then import the package.
+
 # Example
 
 Please check the file *tests/test_obs_reader.py* for examples
