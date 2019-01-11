@@ -66,6 +66,17 @@ class RinexQuality(object):
         """
         return datetime.datetime.strptime(epoch_str, cc.RNX_FORMAT_DATETIME)
 
+    @staticmethod
+    def get_session_code(second_of_day):
+        """
+        Args:
+            second_of_day (int): Second of day (0..86399)
+        Returns:
+            str: The Hour Code (A..X)
+        """
+        i = int(second_of_day / 3600)
+        return chr(i + 65)
+
     def do_prepare_datadict(self, datadict, gapsize):
         """
 
@@ -201,15 +212,15 @@ class RinexQuality(object):
             if w_delta_hours > 1:
                 for i in range(int(w_delta_hours)):
                     d["second_until"] = int((w_from.hour + i+1)*3600 - chkdoy["epoch_interval"])
-                    d["session_code"] = chr(w_from.hour + i + 65)
                     rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
                         **d
                     )
                     rinex_v.append(rinex_v_i)
                     d["second_from"] = int(d["second_until"] + chkdoy["epoch_interval"])
+                    d["session_code"] = self.get_session_code(d["second_from"])
 
             d["second_until"] = int((w_until - w_until_c).total_seconds())
-            d["session_code"] = chr(w_from.hour + i + 65)
+            d["session_code"] = self.get_session_code(d["second_from"])
             rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
             **d
             )
