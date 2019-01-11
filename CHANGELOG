@@ -13,3 +13,11 @@ This is the inertial release
 - Splitting timeseries to hours within method *get_rinex_availability*
 ### Updated
 - Restructured folders and files for packaging
+
+## 0.1.5 - 2019-01-11
+### Added
+- RinexQuality: I added a static method 
+  RinexQuality.get_session_code(second_of_hour) to solve this issue
+### Updated
+- RinexQuality: fixed wrong session code of last entry. Solved with the static
+  method "RienxQuality.get_session_code(second_of_hour)
