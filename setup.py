@@ -18,7 +18,7 @@ with open(os.path.join(here, 'LICENSE.txt'), encoding='utf-8') as f:
 
 setuptools.setup(
     name='RinexParser',
-    version='0.1.4',
+    version='0.1.5',
     description='Parsing Rinex files (supports version 2+3)',
     long_description=readme,
     long_description_content_type='text/markdown',
