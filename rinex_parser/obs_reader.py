@@ -7,6 +7,9 @@ Created on Oct 25, 2016
 import datetime
 import os
 import re
+import multiprocessing
+import logging
+import pprint
 
 from rinex_parser import constants as cc
 
@@ -15,31 +18,14 @@ from rinex_parser.logger import logger
 from rinex_parser.obs_header import Rinex2ObsHeader, Rinex3ObsHeader, RinexObsHeader
 from rinex_parser.obs_epoch import RinexEpoch
 
+# from celery.utils.log import get_task_logger
 
-# from src.common.logging import logger
+
+# celery_logger = get_task_logger(__name__)
+# celery_logger.setLevel(logging.DEBUG)
+celery_logger = logger
+
 __updated__ = "2016-11-16"
-
-
-class RinexObsReaderFactory(object):
-    """
-
-    """
-
-    def create_obs_reader_by_version(self, rinex_version=2):
-        """
-        :returns: RinexObsReader
-        """
-        if rinex_version == 2:
-            return Rinex2ObsReader
-        elif rinex_version == 3:
-            return Rinex3ObsReader
-        assert rinex_version not in [2, 3]
-
-    def create_osb_reader_by_file(self, rinex_file):
-        """
-        :returns: RinexObsReader
-        """
-        return Rinex3ObsReader
 
 
 class RinexObsReader(object):
@@ -193,6 +179,8 @@ class RinexObsReader(object):
         with open(self.rinex_obs_file, "r") as handler:
             for i, line in enumerate(handler):
                 header += line
+                if "END OF HEADER" in line:
+                    break
         self.header = self.RINEX_HEADER_CLASS.from_header(header_string=header)
 
     def add_satellite(self, satellite):
@@ -323,7 +311,6 @@ class Rinex2ObsReader(RinexObsReader):
         for k in range(len(self.header.observation_types)):
             obs_type = self.header.observation_types[k]
             obs_col = line[(16 * k):(16 * (k + 1))]
-            # print("obs_col: '{}'".format(obs_col))
             obs_val = obs_col[:14].strip()
 
             if obs_val == "":
@@ -356,7 +343,6 @@ class Rinex2ObsReader(RinexObsReader):
                     obs_type + "_ss": obs_ss
                 }
             )
-        # print(sat_dict)
         return sat_dict
 
     def read_data_to_dict(self):
@@ -364,11 +350,12 @@ class Rinex2ObsReader(RinexObsReader):
         """
         # SKIP HEADER
         with open(self.rinex_obs_file, "r") as handler:
-            for i, line in enumerate(handler):
-                if 'END OF HEADER' in line:
-                    break
-            del i
-            i = 0
+               
+            # for i, line in enumerate(handler):
+            #     if 'END OF HEADER' in line:
+            #         break
+            # del i
+            # i = 0
             rinex_obs = {
                 "epochs": [], 
                 "fileName": self.rinex_obs_file,
@@ -379,11 +366,18 @@ class Rinex2ObsReader(RinexObsReader):
                 "epochFirst": None,
                 "epochLast": None
             } 
-            with open(self.rinex_obs_file, "r") as handler:
+            end_of_header = False
+            #with open(self.rinex_obs_file, "r") as handler:
+            if True:
                 while True:
 
                     # Check for END_OF_FILE
                     line = handler.readline()
+                    if "END OF HEADER" in line:
+                        celery_logger.debug("End of Header Reached")
+                        end_of_header = True
+                    if not end_of_header:
+                        continue
                     if line == "":
                         break
 
@@ -408,7 +402,6 @@ class Rinex2ObsReader(RinexObsReader):
                         sats = r.group('sat1').strip()
                         # Number of Satellites
                         nos = int(r.group("nos"))
-                        # print("# of Sats: '%d'" % nos)
                         if nos == 0:
                             continue
 
@@ -421,7 +414,7 @@ class Rinex2ObsReader(RinexObsReader):
 
                         # Get Observation Data
                         for j in range(nos):
-                            i += 1
+                            # i += 1
                             sat_num = sats[(3 * j):(3 * (j + 1))]
                             self.add_satellite(sat_num)
 
@@ -599,39 +592,56 @@ class Rinex3ObsReader(RinexObsReader):
 
                         # Number of Satellites
                         nos = int(r.group("num_of_sats"))
-                        # logger.debug("Number of Sats: {}".format(nos))
+                        # celery_logger.debug("Number of Sats: {}".format(nos))
+                        # epoch_pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+                        # epoch_satellites = [handler.readline() for j in range(nos)]
+
+                        # pool_results = epoch_pool.map(self.read_epoch_satellite, [handler.readline() for j in range(nos)])
+                        # for result in pool_results:
+                        #     celery_logger.debug(result)
+                        #     if result:
+                        #         self.add_satellite(result["sat_num"])
+                        #         rnx_epoch["satellites"].append(
+                        #             result["sat_data"]
+                        #         )
+
                         for j in range(nos):
                             line = handler.readline()
-                            sat_data = re.search(cc.RINEX3_DATA_OBSEVATION_REGEXP, line)
-
-                            # Get Observation Data
-                            if sat_data is not None:
-                                sat_num = sat_data.group("sat_num")
-                                self.add_satellite(sat_num)
+                            epoch_sat = self.read_epoch_satellite(line)
+                            if epoch_sat:
+                                self.add_satellite("sat_num")
                                 rnx_epoch["satellites"].append(
-                                    self.read_satellite(sat_id=sat_num, line=line)
+                                    epoch_sat["sat_data"]
                                 )
+                            else:
+                                celery_logger.debug("No Data")
 
                         # Sort Satellites within epoch
                         rnx_epoch["satellites"] = sorted(
                             rnx_epoch["satellites"], key=lambda sat: sat["id"])
 
                         rinex_obs["epochs"].append(rnx_epoch)
-                        # rinex_epoch = RinexEpoch(
-                        #     timestamp=datetime.datetime.strptime(
-                        #         rnx_epoch["id"], cc.RNX_FORMAT_DATETIME),
-                        #     observation_types=self.header.observation_types,
-                        #     satellites=rnx_epoch["satellites"],
-                        #     rcv_clock_offset=self.header.rcv_clock_offset
-                        # )
-                        # if rinex_epoch.is_valid():
-                        #     self.rinex_epochs.append(rinex_epoch)
 
             if len(rinex_obs["epochs"]) > 0:
                 rinex_obs["epochFirst"] = rinex_obs["epochs"][0]["id"]
                 rinex_obs["epochLast"] = rinex_obs["epochs"][-1]["id"]
             self.datadict = rinex_obs
             logger.debug("Successfully created data dict")
+
+    def read_epoch_satellite(self, line):
+        """
+
+        """
+        sat_data = re.search(cc.RINEX3_DATA_OBSEVATION_REGEXP, line)
+        # Get Observation Data
+        if sat_data is not None:
+            sat_num = sat_data.group("sat_num")
+            self.add_satellite(sat_num)
+            return {
+                "sat_num": sat_num, 
+                "sat_data": self.read_satellite(sat_id=sat_num, line=line)
+            }
+        return {}
 
     def read_satellite(self, sat_id, line):
         """
@@ -670,7 +680,8 @@ class Rinex3ObsReader(RinexObsReader):
         sat_dict = {"id": sat_id, "observations": {}}
         d = {}
 
-        sat_sys = sat_id[0]
+        sat_sys = sat_dict["id"][0]
+
         for i in range(len(all_obs)):
             obs_descriptor = self.header.sys_obs_types[sat_sys]["obs_types"][i]
             for k in ["value", "lli", "ss"]:

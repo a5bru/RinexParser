@@ -17,17 +17,153 @@ class RinexObsHeader(object):
     """
     """
 
+    def __init__(self, **kwargs):
+        self.comment = kwargs.get("comment", "")
+        self.format_version = float(kwargs.get("format_version"))
+        self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
+        self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
+        self.satellites = {}
+        self.program = "RNXDMT"
+        self.run_by = kwargs.get("run_by", "BEV/V15 APOS")
+        self.run_date = kwargs.get("run_date", datetime.datetime.now().strftime("%FT%H:%MZ"))
+        self.marker_name = kwargs.get("marker_name")
+        self.marker_number = kwargs.get("marker_number")
+        self.observer = kwargs.get("observer")
+        self.agency = kwargs.get("agency")
+        self.receiver_number = kwargs.get("receiver_number")
+        self.receiver_type = kwargs.get("receiver_type")
+        self.receiver_version = kwargs.get("receiver_version")
+        self.antenna_number = kwargs.get("antenna_number")
+        self.antenna_type = kwargs.get("antenna_type")
+        self.approx_position_x = kwargs.get("approx_position_x", None)
+        self.approx_position_y = kwargs.get("approx_position_y", None)
+        self.approx_position_z = kwargs.get("approx_position_z", None)
+        self.antenna_delta_height = kwargs.get("antenna_delta_height", None)
+        self.antenna_delta_east = kwargs.get("antenna_delta_east", None)
+        self.antenna_delta_north = kwargs.get("antenna_delta_north", None)
+        self.wavelength_fact_l1 = kwargs.get("wavelength_fact_l1", None)
+        self.wavelength_fact_l2 = kwargs.get("wavelength_fact_l2", None)
+        self.wavelength_fact = kwargs.get("wavelength_fact", None)
+        self.observation_types = kwargs.get("observation_types", None)
+        self.interval = kwargs.get("interval", None)
+        self.first_observation = kwargs.get("first_observation", None)
+        self.last_observation = kwargs.get("last_observation", None)
+        self.time_system = kwargs.get("time_system", None)
+        self.rcv_clock_offset = kwargs.get("rcv_clock_offset", None)
+        self.leap_seconds = kwargs.get("leap_seconds", None)
+        self.total_satellites = 0
+        self.empty = ""
+
     @classmethod
     def from_header(cls, header_string):
         """
         Args:
             header: str, Rinex Header
         Returns:
-            Rinex2ObsHeader
+            Rinex3ObsHeader
         """
         tmp_header = cls()
-        tmp_header.set_header(header_lines=header_string)
-        return tmp_header
+        try: 
+            tmp_header.set_header(header_lines=header_string)
+            return tmp_header
+        except Exception as e:
+            logger.error(e)
+            return None
+
+    @staticmethod
+    def parse_version_type(line):
+        format_version = float(line[:9].strip())
+        file_type = line[9 + 11]
+        satellite_system = line[9 + 11 + 1 + 19]
+        return {
+            "format_version": format_version,
+            "file_type": file_type,
+            "satellite_system": satellite_system,
+        }
+
+    def set_interval(self, line):
+        self.interval = int(float(line.split()[0].strip()))
+
+    def set_version_type(self, line):
+        d = self.parse_version_type(line)
+        self.format_version = d["format_version"]
+        self.file_type = d["file_type"]
+        self.satellite_system = d["satellite_system"]
+
+    def set_pgm_by_date(self, line):
+        # self.program = line[:20].strip()
+        self.run_by = line[20:20 + 20].strip()
+        self.run_date = line[40:40 + 20].strip()
+
+    def set_comment(self, line):
+        # new_comment = line[:60].strip()
+        new_comment = line
+        if self.comment == "":
+            self.comment = new_comment
+        else:
+            self.comment = "%s\n%s" % (self.comment, new_comment)
+
+    def set_marker_name(self, line):
+        self.marker_name = line[:60].strip()
+
+    def set_marker_number(self, line):
+        self.marker_number = line[:20].strip()
+
+    def set_observer_agency(self, line):
+        self.observer = line[00:20].strip()
+        self.agency = line[20:60].strip()
+        # clean ADDREF issue
+        self.agency = self.agency.split("     ")[0]
+
+    def set_receiver(self, line):
+        self.receiver_number = line[:20].strip()
+        self.receiver_type = line[20:40].strip()
+        self.receiver_version = line[40:60].strip()
+
+    def set_antenna(self, line):
+        self.antenna_number = line[:20].strip()
+        self.antenna_type = line[20:40].strip()
+
+    def set_approx_position(self, line):
+        self.approx_position_x = float(line[00:14])
+        self.approx_position_y = float(line[14:28])
+        self.approx_position_z = float(line[28:42])
+
+    def set_antenna_delta(self, line):
+        self.antenna_delta_height = float(line[00:14])
+        self.antenna_delta_east = float(line[14:28])
+        self.antenna_delta_north = float(line[28:42])
+
+    def set_wavelength_fact(self, line):
+        self.wavelength_fact_l1 = int(line[00:6])
+        self.wavelength_fact_l2 = int(line[6:12])
+        wlf = line[12:18].strip()
+        if not wlf:
+            wlf = 0
+        self.wavelength_fact = int(wlf)
+
+    def set_observation_types(self, line):
+        self.observation_types_number = int(line.split("#")[0].split()[0])
+        self.observation_types = line.split("#")[0].split()[1:]
+        assert self.observation_types_number == len(self.observation_types)
+
+    def set_first_observation(self, line):
+        self.first_observation = datetime.datetime.strptime(
+            line[:43], c.RNX_FORMAT_OBS_TIME)
+        self.time_system = line[43 + 5:43 + 5 + 3]
+
+    def set_last_observation(self, line):
+        self.last_observation = datetime.datetime.strptime(
+            line[:43], c.RNX_FORMAT_OBS_TIME)
+
+    def set_rcv_clock_offset(self, line):
+        self.rcv_clock_offset = int(line[:6])
+
+    def set_leap_seconds(self, line):
+        self.leap_seconds = int(line[:6])
+
+    def set_total_satellites(self, line):
+        self.total_satellites = int(line[:6])
 
     def set_header(self, header_lines):
         """
@@ -105,64 +241,9 @@ class RinexObsHeader(object):
 class Rinex2ObsHeader(RinexObsHeader):
 
     def __init__(self, **kwargs):
-        self.format_version = float(kwargs.get("format_version", "2.11"))
-        self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
-        self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
-        self.satellites = {}
+        kwargs["format_version"] = kwargs.get("format_version", "2.11")
+        super(Rinex2ObsHeader, self).__init__(**kwargs)
         self.rinex_export_version = 2
-
-        self.comment = kwargs.get("comment", "")
-
-        # self.program = kwargs.get("program", "RNXDMT")
-        self.program = "RNXDMT"
-        self.run_by = kwargs.get("run_by", "BEV/V15 APOS")
-        self.run_date = kwargs.get(
-            "run_date", datetime.datetime.now().strftime("%FT%H:%MZ"))
-
-        self.marker_name = kwargs.get("marker_name")
-
-        self.marker_number = kwargs.get("marker_number")
-
-        self.observer = kwargs.get("observer")
-        self.agency = kwargs.get("agency")
-
-        self.receiver_number = kwargs.get("receiver_number")
-        self.receiver_type = kwargs.get("receiver_type")
-        self.receiver_version = kwargs.get("receiver_version")
-
-        self.antenna_number = kwargs.get("antenna_number")
-        self.antenna_type = kwargs.get("antenna_type")
-
-        self.approx_position_x = kwargs.get(
-            "approx_position_x", None)
-        self.approx_position_y = kwargs.get(
-            "approx_position_y", None)
-        self.approx_position_z = kwargs.get(
-            "approx_position_z", None)
-
-        self.antenna_delta_height = kwargs.get("antenna_delta_height", None)
-        self.antenna_delta_east = kwargs.get("antenna_delta_east", None)
-        self.antenna_delta_north = kwargs.get("antenna_delta_north", None)
-
-        self.wavelength_fact_l1 = kwargs.get("wavelength_fact_l1", None)
-        self.wavelength_fact_l2 = kwargs.get("wavelength_fact_l2", None)
-        self.wavelength_fact = kwargs.get("wavelength_fact", None)
-
-        self.observation_types = kwargs.get("observation_types", None)
-
-        self.interval = kwargs.get("interval", None)
-
-        self.first_observation = kwargs.get("first_observation", None)
-        self.last_observation = kwargs.get("last_observation", None)
-        self.time_system = kwargs.get("time_system", None)
-
-        self.rcv_clock_offset = kwargs.get("rcv_clock_offset", None)
-
-        self.leap_seconds = kwargs.get("leap_seconds", None)
-
-        self.total_satellites = 0
-
-        self.empty = ""
 
     def to_rinex3(self):
         """
@@ -239,101 +320,6 @@ class Rinex2ObsHeader(RinexObsHeader):
                 s = "{:60s}# / TYPES OF OBSERV".format(s)
         return s
 
-    @classmethod
-    def from_header(cls, header_string):
-        """
-        Args:
-            header: str, Rinex Header
-        Returns:
-            Rinex2ObsHeader
-        """
-        tmp_header = cls()
-        tmp_header.set_header(header_lines=header_string)
-        return tmp_header
-
-    def set_version_type(self, line):
-        self.format_version = float(line[:9].strip())
-        self.file_type = line[9 + 11]
-        self.satellite_system = line[9 + 11 + 1 + 19]
-
-    def set_pgm_by_date(self, line):
-        # self.program = line[:20].strip()
-        self.run_by = line[20:20 + 20].strip()
-        self.run_date = line[40:40 + 20].strip()
-
-    def set_comment(self, line):
-        # new_comment = line[:60].strip()
-        new_comment = line
-        if self.comment == "":
-            self.comment = new_comment
-        else:
-            self.comment = "%s\n%s" % (self.comment, new_comment)
-
-    def set_marker_name(self, line):
-        self.marker_name = line[:60].strip()
-
-    def set_marker_number(self, line):
-        self.marker_number = line[:20].strip()
-
-    def set_observer_agency(self, line):
-        self.observer = line[00:20].strip()
-        self.agency = line[20:60].strip()
-        # clean ADDREF issue
-        self.agency = self.agency.split("     ")[0]
-
-    def set_receiver(self, line):
-        self.receiver_number = line[:20].strip()
-        self.receiver_type = line[20:40].strip()
-        self.receiver_version = line[40:60].strip()
-
-    def set_antenna(self, line):
-        self.antenna_number = line[:20].strip()
-        self.antenna_type = line[20:40].strip()
-
-    def set_approx_position(self, line):
-        self.approx_position_x = float(line[00:14])
-        self.approx_position_y = float(line[14:28])
-        self.approx_position_z = float(line[28:42])
-
-    def set_antenna_delta(self, line):
-        self.antenna_delta_height = float(line[00:14])
-        self.antenna_delta_east = float(line[14:28])
-        self.antenna_delta_north = float(line[28:42])
-
-    def set_wavelength_fact(self, line):
-        self.wavelength_fact_l1 = int(line[00:6])
-        self.wavelength_fact_l2 = int(line[6:12])
-        wlf = line[12:18].strip()
-        if not wlf:
-            wlf = 0
-        self.wavelength_fact = int(wlf)
-
-    def set_observation_types(self, line):
-        self.observation_types_number = int(line.split("#")[0].split()[0])
-        self.observation_types = line.split("#")[0].split()[1:]
-        assert self.observation_types_number == len(self.observation_types)
-
-    def set_interval(self, line):
-        self.interval = int(float(line.split()[0].strip()))
-
-    def set_first_observation(self, line):
-        self.first_observation = datetime.datetime.strptime(
-            line[:43], c.RNX_FORMAT_OBS_TIME)
-        self.time_system = line[43 + 5:43 + 5 + 3]
-
-    def set_last_observation(self, line):
-        self.last_observation = datetime.datetime.strptime(
-            line[:43], c.RNX_FORMAT_OBS_TIME)
-
-    def set_rcv_clock_offset(self, line):
-        self.rcv_clock_offset = int(line[:6])
-
-    def set_leap_seconds(self, line):
-        self.leap_seconds = int(line[:6])
-
-    def set_total_satellites(self, line):
-        self.total_satellites = int(line[:6])
-
 
 class Rinex3ObsHeader(Rinex2ObsHeader):
 
@@ -393,22 +379,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             "leap_second_time_system", None)
 
         self.prn_obs = None
-
-    @classmethod
-    def from_header(cls, header_string):
-        """
-        Args:
-            header: str, Rinex Header
-        Returns:
-            Rinex3ObsHeader
-        """
-        tmp_header = cls()
-        try: 
-            tmp_header.set_header(header_lines=header_string)
-            return tmp_header
-        except Exception as e:
-            logger.error(e)
-            return None
 
     def to_rinex3(self):
         self.rinex_export_version = 3
@@ -478,10 +448,10 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
         return "{}\n{:60s}END OF HEADER".format(rinex_header, "")
 
-        sot = self.get_sys_obs_types()
-        if sot:
-            rinex_header = "{}\n{}".format(rinex_header, sot)
-        return rinex_header
+        # sot = self.get_sys_obs_types()
+        # if sot:
+        #     rinex_header = "{}\n{}".format(rinex_header, sot)
+        # return rinex_header
 
     def get_antenna_delta_xyz(self):
         """
@@ -626,6 +596,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
     def set_sys_obs_types(self, line):
         result = self.RE_SYS_OBS_TYPE.match(line)
+
         d = result.groupdict()
         sat_sys = ""
 
@@ -643,8 +614,10 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             sat_sys = self.last_sat_sys
 
         # get all observation descriptors 
-        if len(sat_sys) > 0:
-            for obs_descriptor in re.finditer(c.RINEX3_FORMAT_OBS_DESCRIPTOR, line):
+        if sat_sys != "":
+            obs_descriptors = re.finditer(c.RINEX3_FORMAT_OBS_DESCRIPTOR, line)
+            for obs_descriptor in obs_descriptors:
+                # print(obs_descriptor.group(0).strip())
                 obs_descriptor_clean = obs_descriptor.group(0).strip()
                 if obs_descriptor_clean not in self.sys_obs_types[sat_sys]["obs_types"]:
                     self.sys_obs_types[sat_sys]["obs_types"].append(obs_descriptor_clean)
@@ -783,12 +756,15 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         super(Rinex3ObsHeader, self).set_header(header_lines)
         last_sat_sys_ps = ""
         last_sat_sys_ps_cp = ""
-        last_sat_sys_ot = ""
+        # last_sat_sys_ot = ""
         last_sat_sys_sf = ""
 
         for line in header_lines.split("\n"):
             if line == "":
                 continue
+
+            if "END OF HEADER" in line:
+                break
 
             header_label = line[60:]
             if 'MARKER TYPE' in header_label:
@@ -814,10 +790,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
             if 'SYS / # / OBS TYPES' in header_label:
                 self.set_sys_obs_types(line)
-                # last_sat_sys_ot = ot["satellite_system"]
-
-            # if 'SYS / # / OBS TYPES' in header_label and line[0] == " ":
-            #     self.set_sys_obs_types_extra(line, last_sat_sys_ot)
 
             if 'SIGNAL STRENGTH UNIT' in header_label:
                 self.set_signal_strength_unit(line)

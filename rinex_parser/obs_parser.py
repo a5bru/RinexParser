@@ -12,7 +12,7 @@ import os
 import argparse
 
 from rinex_parser.logger import logger
-from rinex_parser.obs_reader import RinexObsReaderFactory
+from rinex_parser.obs_factory import RinexObsReaderFactory
 
 
 def run():
