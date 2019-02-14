@@ -81,7 +81,7 @@ class RinexQuality(object):
         """
 
         """
-        if len(datadict["epochs"]) == 0:
+        if "epochs" not in datadict or ("epochs" in datadict and len(datadict["epochs"]) == 0):
             logger.warn("No Epoch parsed")
             return ""
 

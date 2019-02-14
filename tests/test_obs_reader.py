@@ -13,13 +13,15 @@ from rinex_parser.logger import logger
 
 # logger.setLevel(logging.INFO)
 
-RINEX3_FILE = "data/GRAZ00AUT_R_20182540000_01D_30S_MO.rnx"
-RINEX2_FILE = "data/graz2540.18o"
+RINEX3_FILE = "data/r3/GRAZ00XXX_R_20182540000_01D_30S_MO.rnx"
+RINEX2_FILE = "data/r2/graz2540.18o"
 
 class ObsReaderTestSuite(unittest.TestCase):
     """Advanced test cases."""
 
     def test_rinex_parser(self):
+
+        logger.info("Test RinexParser 2+3")
 
         def tmp(rnx_version, rnx_file):
             rnx_file = os.path.join(os.path.dirname(__file__), rnx_file)
