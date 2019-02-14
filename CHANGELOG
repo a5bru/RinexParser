@@ -21,3 +21,9 @@ This is the inertial release
 ### Updated
 - RinexQuality: fixed wrong session code of last entry. Solved with the static
   method "RienxQuality.get_session_code(second_of_hour)
+
+## 0.1.6 - 2019-02-14
+### Updated
+- RinexFactory: class lives no in separate file, can build classes from file or by version
+- RinexObsReader: class holds now initial part for Rinex2 and Rinex3
+- RinexObsHeader: class holds now initial part for Rinex2 and Rinex3

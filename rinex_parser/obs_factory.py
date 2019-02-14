@@ -1,5 +1,5 @@
-from obs_reader import Rinex2ObsReader, Rinex3ObsReader
-from obs_header import Rinex2ObsHeader, Rinex3ObsHeader, RinexObsHeader
+from .obs_reader import Rinex2ObsReader, Rinex3ObsReader
+from .obs_header import Rinex2ObsHeader, Rinex3ObsHeader, RinexObsHeader
 
 
 RINEX_CLASSES = {
