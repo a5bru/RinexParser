@@ -12,7 +12,7 @@ import os
 import argparse
 
 from rinex_parser.logger import logger
-from rinex_parser.obs_factory import RinexObsReaderFactory
+from rinex_parser.obs_factory import RinexObsFactory
 
 
 def run():
@@ -33,7 +33,7 @@ class RinexParser():
         self.rinex_file = kwargs.get("rinex_file", "")
         if self.rinex_file != "":
             self.set_rinex_file(self.rinex_file)
-        self.rinex_reader_factory = RinexObsReaderFactory()
+        self.rinex_reader_factory = RinexObsFactory()
         self.__create_reader(self.rinex_version)
 
     @property

@@ -6,8 +6,7 @@ Created on Nov 7, 2016
 
 import datetime
 import re
-
-from pprint import pprint
+import abc
 
 from rinex_parser import constants as c
 from rinex_parser.logger import logger
@@ -17,13 +16,17 @@ class RinexObsHeader(object):
     """
     """
 
+    __metaclass__ = abc.ABCMeta
+
+    RE_HEADER_TYPES_OF_OBSERV = re.compile(c.RINEX2_HEADER_OBSERVATION_TYPES)
+
     def __init__(self, **kwargs):
         self.comment = kwargs.get("comment", "")
         self.format_version = float(kwargs.get("format_version"))
         self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
         self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
         self.satellites = {}
-        self.program = "RNXDMT"
+        self.program = "APOS.dama"
         self.run_by = kwargs.get("run_by", "BEV/V15 APOS")
         self.run_date = kwargs.get("run_date", datetime.datetime.now().strftime("%FT%H:%MZ"))
         self.marker_name = kwargs.get("marker_name")
@@ -58,9 +61,9 @@ class RinexObsHeader(object):
     def from_header(cls, header_string):
         """
         Args:
-            header: str, Rinex Header
+            header: str, RinexHeaderString
         Returns:
-            Rinex3ObsHeader
+            RinexObsHeader (2 or 3)
         """
         tmp_header = cls()
         try: 
@@ -92,8 +95,8 @@ class RinexObsHeader(object):
 
     def set_pgm_by_date(self, line):
         # self.program = line[:20].strip()
-        self.run_by = line[20:20 + 20].strip()
-        self.run_date = line[40:40 + 20].strip()
+        self.run_by = line[20:40].strip()
+        self.run_date = line[40:60].strip()
 
     def set_comment(self, line):
         # new_comment = line[:60].strip()
@@ -143,9 +146,16 @@ class RinexObsHeader(object):
         self.wavelength_fact = int(wlf)
 
     def set_observation_types(self, line):
-        self.observation_types_number = int(line.split("#")[0].split()[0])
-        self.observation_types = line.split("#")[0].split()[1:]
-        assert self.observation_types_number == len(self.observation_types)
+        m = re.match(self.RE_HEADER_TYPES_OF_OBSERV, line)
+        if m is None:
+            return
+        d = m.groupdict()
+        if d["noo"].strip() != "":
+            self.observation_types_number = int(d["noo"])
+        observation_types = re.finditer(c.RINEX2_HEADER_OBS_DESCRIPTOR, line)
+        if self.observation_types is None:
+            self.observation_types = []
+        self.observation_types += observation_types
 
     def set_first_observation(self, line):
         self.first_observation = datetime.datetime.strptime(
@@ -617,7 +627,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if sat_sys != "":
             obs_descriptors = re.finditer(c.RINEX3_FORMAT_OBS_DESCRIPTOR, line)
             for obs_descriptor in obs_descriptors:
-                # print(obs_descriptor.group(0).strip())
                 obs_descriptor_clean = obs_descriptor.group(0).strip()
                 if obs_descriptor_clean not in self.sys_obs_types[sat_sys]["obs_types"]:
                     self.sys_obs_types[sat_sys]["obs_types"].append(obs_descriptor_clean)
