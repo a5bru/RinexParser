@@ -16,7 +16,7 @@ RINEX_CLASSES = {
 }
 
 
-class RinexObsReaderFactory(object):
+class RinexObsFactory(object):
     """
 
     """
