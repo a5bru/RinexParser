@@ -740,10 +740,13 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
     def set_leap_seconds(self, line):
         self.leap_second_current = int(line[00:6])
-        self.leap_second_other = int(line[6:12])
-        self.leap_second_week = int(line[12:18])
-        self.leap_second_day = int(line[18:24])
-        time_system = line[24:27].strip()
+        try:
+            self.leap_second_other = int(line[6:12])
+            self.leap_second_week = int(line[12:18])
+            self.leap_second_day = int(line[18:24])
+            time_system = line[24:27].strip()
+        except:
+            time_system = "GPS"
         if time_system == "":
             time_system = "GPS"
         self.leap_second_time_system = time_system
