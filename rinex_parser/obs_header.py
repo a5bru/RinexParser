@@ -756,7 +756,9 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             self.leap_second_day = int(line[18:24])
             time_system = line[24:27].strip()
         except:
-            pass
+            time_system = "GPS"
+        if time_system == "":
+            time_system = "GPS"
         self.leap_second_time_system = time_system
 
     def set_header(self, header_lines):
