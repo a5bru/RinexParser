@@ -14,14 +14,19 @@ cleanVenv:
 
 cleanAll: cleanBuild cleanVenv cleanPYco
 
+
 isort:
 	sh -c "isort --skip-glob=.tox --recursive . "
 
 lint:
 	flake8 --exclude=.tox
 
+buildEgg:
+	pipenv run python setup.py bdist_wheel
+
 prepareVenv:
-	virtualenv --python=python3 ${VIRTUALENV_DIR}
+	pipenv install
+	#virtualenv --python=python3 ${VIRTUALENV_DIR}
 
 setupVenv:
 	pip install -r requirements.txt
