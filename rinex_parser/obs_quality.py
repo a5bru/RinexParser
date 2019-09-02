@@ -173,11 +173,9 @@ class RinexQuality(object):
 
         return chkdoy
 
-    def get_rinex_availability(self, datadict, gapsize=5):
+    def get_rinex_availability_as_dict(self, datadict, gapsize=5):
         """
-        Should generate an output like:
-
-        'YYYY-MM-DD;STATION;SECOND_BEGIN;SECOND_END;EPOCH_INTERVAL;SESSION_CODE;IS_ONLINE'
+        Get RinexAvailability as dictionary
         """
         chkdoy = self.do_prepare_datadict(datadict, gapsize)
         rinex_v = []
@@ -220,12 +218,67 @@ class RinexQuality(object):
                     d["session_code"] = self.get_session_code(d["second_from"])
 
             d["second_until"] = int((w_until - w_until_c).total_seconds())
-            d["session_code"] = self.get_session_code(d["second_from"])
+            d["session_code"] = self.get_session_code(d["second_from"])  
+            rinex_v.append(d)
+        return rinex_v  
+
+    def get_rinex_availability_as_str(self, availability_dict):
+        """
+        """
+        rinex_v = []
+        for d in availability_dict:        
             rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
             **d
             )
             rinex_v.append(rinex_v_i)
         return "\n".join(rinex_v)
+
+    def get_rinex_availability(self, datadict, gapsize=5):
+        """
+        Should generate an output like:
+
+        'YYYY-MM-DD;STATION;SECOND_BEGIN;SECOND_END;EPOCH_INTERVAL;SESSION_CODE;IS_ONLINE'
+        """
+        rinex_v_dict = self.get_rinex_availability_as_dict(datadict, gapsize)
+        return self.get_rinex_availability_as_str(rinex_v_dict)
+
+    def get_rinstat_as_dict(self, datadict, gapsize=5):
+        """
+        Get RinstatData as a dictionary
+        """
+        chkdoy = self.do_prepare_datadict(datadict, gapsize)
+        chkdoy["gaps_count"] = len(chkdoy["gaps"])
+        chkdoy["epoch_first"] = datetime.datetime.strptime(chkdoy["epoch_first"], cc.RNX_FORMAT_DATETIME).strftime(cc.RNX_FORMAT_TIME)
+        chkdoy["epoch_last"] = datetime.datetime.strptime(chkdoy["epoch_last"], cc.RNX_FORMAT_DATETIME).strftime(cc.RNX_FORMAT_TIME)
+        chkdoy["gaps_prepared"] = []
+        for gap in chkdoy["gaps"]:
+            gap_dict = {
+                "ge": int(gap["gap_epoch_count"]) - 1,
+                "gs": gap["gap_duration"] - chkdoy["epoch_interval"],
+                "gf": datetime.datetime.strptime(gap["gap_begin"], cc.RNX_FORMAT_DATETIME) + datetime.timedelta(seconds=chkdoy["epoch_interval"]),
+                "gu": datetime.datetime.strptime(gap["gap_end"], cc.RNX_FORMAT_DATETIME),
+            }
+            chkdoy["gaps_prepared"].append(gap_dict)
+        return chkdoy
+
+    def get_rinstat_as_str(self, rinstat_dict):
+        """
+        """
+        rinstat_dict["gaps_list"] = ""
+        for gap in rinstat_dict["gaps_prepared"]:
+            gap_str = "--- GAP:  {gf} - {gu}  {gs:10.1f} s {ge:10d} e".format(
+                **gap
+            )
+            rinstat_dict["gaps_list"] += "\n{}".format(gap_str)
+
+        # Report
+        return """+++ >>>   {filename}{gaps_list}
++++ RNX.SUM   {date} ({doy})   {station}   {epoch_first} - {epoch_last}   {total_secs} s   {epoch_interval} s {gaps_count}
++++    #maxepo #aepoch #mepoch #gaps>{gapsize} #gaps<{gapsize}
++++      {epochs_max:5d}   {epochs_valid:5d}   {epochs_missing:5d}   {gaps_more:5d}   {gaps_less:5d}
++++ <<<
+        """.format(**rinstat_dict)
+
 
     def get_rinstat_out(self, datadict, gapsize=5):
         """
@@ -261,29 +314,5 @@ class RinexQuality(object):
             gapsize: int, Amount of gaps to bother
 
         """
-        chkdoy = self.do_prepare_datadict(datadict, gapsize)
-        chkdoy["gaps_list"] = ""
-        chkdoy["gaps_count"] = len(chkdoy["gaps"])
-        chkdoy["epoch_first"] = datetime.datetime.strptime(chkdoy["epoch_first"], cc.RNX_FORMAT_DATETIME).strftime(cc.RNX_FORMAT_TIME)
-        chkdoy["epoch_last"] = datetime.datetime.strptime(chkdoy["epoch_last"], cc.RNX_FORMAT_DATETIME).strftime(cc.RNX_FORMAT_TIME)
-        for gap in chkdoy["gaps"]:
-            gap_dict = {
-                "ge": int(gap["gap_epoch_count"]) - 1,
-                "gs": gap["gap_duration"] - chkdoy["epoch_interval"],
-                "gf": datetime.datetime.strptime(gap["gap_begin"], cc.RNX_FORMAT_DATETIME) + datetime.timedelta(seconds=chkdoy["epoch_interval"]),
-                "gu": datetime.datetime.strptime(gap["gap_end"], cc.RNX_FORMAT_DATETIME),
-            }
-            # gap_dict["gs"] = (gap_dict["gu"] - gap_dict["gf"]).total_seconds()
-            gap_str = "--- GAP:  {gf} - {gu}  {gs:10.1f} s {ge:10d} e".format(
-                **gap_dict
-            )
-            chkdoy["gaps_list"] += "\n{}".format(gap_str)
-        # logger.info(chkdoy)
-
-        # Report
-        return """+++ >>>   {filename}{gaps_list}
-+++ RNX.SUM   {date} ({doy})   {station}   {epoch_first} - {epoch_last}   {total_secs} s   {epoch_interval} s {gaps_count}
-+++    #maxepo #aepoch #mepoch #gaps>{gapsize} #gaps<{gapsize}
-+++      {epochs_max:5d}   {epochs_valid:5d}   {epochs_missing:5d}   {gaps_more:5d}   {gaps_less:5d}
-+++ <<<
-        """.format(**chkdoy)
+        chkdoy = self.get_rinstat_as_dict(datadict, gapsize)
+        return self.get_rinstat_as_str(chkdoy)
