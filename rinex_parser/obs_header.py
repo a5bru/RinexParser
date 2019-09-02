@@ -748,13 +748,15 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             self.glonass_cod_phs_bis[si] = float(line[5 + pos:13 + pos])
 
     def set_leap_seconds(self, line):
-        self.leap_second_current = int(line[00:6])
-        self.leap_second_other = int(line[6:12])
-        self.leap_second_week = int(line[12:18])
-        self.leap_second_day = int(line[18:24])
-        time_system = line[24:27].strip()
-        if time_system == "":
-            time_system = "GPS"
+        time_system = "GPS"
+        try:
+            self.leap_second_current = int(line[0:6])
+            self.leap_second_other = int(line[6:12])
+            self.leap_second_week = int(line[12:18])
+            self.leap_second_day = int(line[18:24])
+            time_system = line[24:27].strip()
+        except:
+            pass
         self.leap_second_time_system = time_system
 
     def set_header(self, header_lines):
