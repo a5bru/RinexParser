@@ -196,7 +196,7 @@ class RinexQuality(object):
             window["valid_from"] = gap["gap_end"]
         window["valid_until"] = chkdoy["epoch_last"]
         window_list.append(dict(**window))
-
+        
         for w in window_list:
             w_from = datetime.datetime.strptime(w["valid_from"], cc.RNX_FORMAT_DATETIME)
             w_from_c = datetime.datetime(w_from.year, w_from.month, w_from.day)
@@ -210,17 +210,18 @@ class RinexQuality(object):
             if w_delta_hours > 1:
                 for i in range(int(w_delta_hours)):
                     d["second_until"] = int((w_from.hour + i+1)*3600 - chkdoy["epoch_interval"])
-                    rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
-                        **d
-                    )
-                    rinex_v.append(rinex_v_i)
+                    # rinex_v_i = "{date};{station_name};{second_from};{second_until};{epoch_interval};{session_code};{is_online}".format(
+                    #     **d
+                    # )
+                    # rinex_v.append(rinex_v_i)
                     d["second_from"] = int(d["second_until"] + chkdoy["epoch_interval"])
                     d["session_code"] = self.get_session_code(d["second_from"])
-
-            d["second_until"] = int((w_until - w_until_c).total_seconds())
-            d["session_code"] = self.get_session_code(d["second_from"])  
-            rinex_v.append(d)
-        return rinex_v  
+                    rinex_v.append(d)
+            else:
+                d["second_until"] = int((w_until - w_until_c).total_seconds())
+                d["session_code"] = self.get_session_code(d["second_from"])  
+                rinex_v.append(d)
+        return rinex_v
 
     def get_rinex_availability_as_str(self, availability_dict):
         """
