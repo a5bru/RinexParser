@@ -274,11 +274,10 @@ class RinexQuality(object):
 
         # Report
         return """+++ >>>   {filename}{gaps_list}
-+++ RNX.SUM   {date} ({doy})   {station}   {epoch_first} - {epoch_last}   {total_secs} s   {epoch_interval} s {gaps_count}
++++ RNX.SUM   {date} ({doy})   {station}   {epoch_first} - {epoch_last}   {total_secs} s   {epoch_interval} s {gaps_count:7d}
 +++    #maxepo #aepoch #mepoch #gaps>{gapsize} #gaps<{gapsize}
 +++      {epochs_max:5d}   {epochs_valid:5d}   {epochs_missing:5d}   {gaps_more:5d}   {gaps_less:5d}
-+++ <<<
-        """.format(**rinstat_dict)
++++ <<<""".format(**rinstat_dict)
 
 
     def get_rinstat_out(self, datadict, gapsize=5):
