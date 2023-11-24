@@ -27,3 +27,14 @@ This is the inertial release
 - RinexFactory: class lives no in separate file, can build classes from file or by version
 - RinexObsReader: class holds now initial part for Rinex2 and Rinex3
 - RinexObsHeader: class holds now initial part for Rinex2 and Rinex3
+
+## 1.0.1 - 2022-08-30
+### Changed
+- RinexQuality: RinStat format adapted
+
+## 1.0.2 - 2023-11-24
+### Added
+- RinexObsHeader: Added REGEX for L3 signals and D obs types (descriptors)
+### Changed
+- RinexObsReader: method read_satellite correct parsing ob decriptors
+
