@@ -21,9 +21,10 @@ RINEX3_DATELINE_REGEXP = r"^> (?P<year4>\d{4}) (?P<month>[ \d]{2}) (?P<day>[ \d]
 RINEX3_MULTIPLE_OBS_REGEXP = r"(?P<first_o>([-\d\ ]{10}[\.\ ][\ \d]{3})([\d\ ])([\d\ ]))"
 RINEX3_DATA_OBSEVATION_REGEXP = r"^(?P<sat_num>(%s))(?P<first_o>(([-\d\ ]{10}[\.\ ][\ \d]{3})([\d\ ])([\d\ ])))*(?P<last_o>([-\d\ ]{10}[\.\ ][\ \d]{3})([\d\ ])?([\d\ ])?)?" % RINEX3_SATELLITES_REGEXP
 RINEX3_FORMAT_OBS_TIME = "%Y %m %d %H %M %S.0000000"
-RINEX3_FORMAT_OBS_DESCRIPTOR = r"\ [CDLS][125678][ACILPQW]?"
+RINEX3_FORMAT_OBS_DESCRIPTOR = r"\ [CDLS]\d[ACDILPQWX]?"
 RINEX3_FORMAT_SYS_OBS_TYPES = r"^(((?P<sat_sys>[%s])  (?P<obs_amount>[\ \d]{3})|(?P<obs_cont>\ {6})))(?P<obs_descriptor>%s){0,13}.*(SYS / # / OBS TYPES)" % (RINEX3_SATELLITE_SYSTEMS, RINEX3_FORMAT_OBS_DESCRIPTOR)
 RINEX3_FORMAT_FILE_NAME = r"(?P<station>\w{4})(\d)(\d)(?P<country>[A-Z]{3})_\w_(?P<year4>\d{4})(?P<doy>\d{3})(?P<hour>\d{2})(?P<minute>\d{2})_(?P<file_period>\d\d[A-Z])_((?P<data_freq>\d\d[A-Z])_)?\w\w.[rc]nx"
+RINEX3_DATA_OBSERVATION_FIELD_REGEXP = r"((?P<value>\ *[\-\+]?[0-9]*\.?[0-9]{3})(?P<lli>[\ \d])?(?P<ssi>[\ \d])?)"
 
 RNX_FORMAT_DATETIME = "%Y-%m-%dT%H:%M:%SZ"
 RNX_FORMAT_DATE = "%Y-%m-%d"
