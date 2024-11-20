@@ -62,7 +62,7 @@ class RinexParser():
         assert self.rinex_file != ""
         self.rinex_reader.set_rinex_obs_file(self.rinex_file)
         self.rinex_reader.read_header()
-        # logger.info("done with header")
+        logger.debug("Read header successfully")
         self.rinex_reader.read_data_to_dict()
 
     def run(self):
