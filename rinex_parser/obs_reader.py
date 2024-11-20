@@ -655,32 +655,39 @@ class Rinex3ObsReader(RinexObsReader):
         """
 
         all_obs = []
-        sat_sys = sat_id[0]
-        m = re.match(cc.RINEX3_DATA_OBSEVATION_REGEXP, line)
+        try:
+            sat_sys = sat_id[0]
+            m = re.match(cc.RINEX3_DATA_OBSEVATION_REGEXP, line)
 
-        if m:
-            ofp = re.compile(cc.RINEX3_DATA_OBSERVATION_FIELD_REGEXP)
-            obs_raw = [line[3+i*16:3+(i+1)*16] for i in range((len(line)-3) // 16)] + \
-                [line[3+((len(line)-3)//16)*16:]]
-            for i, obs_field in enumerate(obs_raw):
-                d = {
-                    "obs_type": self.header.sys_obs_types[sat_sys]["obs_types"][i],
-                    "lli": None, "ssi": None, "value": None,
-                }
-                r = ofp.match(obs_field)
-                if r:
-                    rd = r.groupdict()
-                    d["value"] = float(rd["value"])
-                    d["ssi"] = 0 if not str(rd["ssi"]).isnumeric() else int(rd["ssi"])
-                    d["lli"] = None if not str(rd["lli"]).isnumeric() else int(rd["lli"])
-                all_obs.append(d)
+            if m:
+                ofp = re.compile(cc.RINEX3_DATA_OBSERVATION_FIELD_REGEXP)
+                obs_raw = [line[3+i*16:3+(i+1)*16] for i in range((len(line)-3) // 16)] + \
+                    [line[3+((len(line)-3)//16)*16:]]
+                for i, obs_field in enumerate(obs_raw):
+                    if i >= len(self.header.sys_obs_types[sat_sys]['obs_types']):
+                        continue
+                    d = {
+                        "obs_type": self.header.sys_obs_types[sat_sys]["obs_types"][i],
+                        "lli": None, "ssi": None, "value": None,
+                    }
+                    r = ofp.match(obs_field)
+                    if r:
+                        rd = r.groupdict()
+                        d["value"] = float(rd["value"])
+                        d["ssi"] = 0 if not str(rd["ssi"]).isnumeric() else int(rd["ssi"])
+                        d["lli"] = None if not str(rd["lli"]).isnumeric() else int(rd["lli"])
+                    all_obs.append(d)
 
-        sat_dict = {"id": sat_id, "observations": {}}
-        d = {}
+            sat_dict = {"id": sat_id, "observations": {}}
+            d = {}
 
-        for obs_field in all_obs:
-            for k in ["value", "lli", "ssi"]:
-                d["{}_{}".format(obs_field["obs_type"], k)] = obs_field[k]
+            for obs_field in all_obs:
+                for k in ["value", "lli", "ssi"]:
+                    d["{}_{}".format(obs_field["obs_type"], k)] = obs_field[k]
 
-        sat_dict["observations"].update(d)
+            sat_dict["observations"].update(d)
+        except Exception as e:
+            print(e)
+            print(line)
+            raise(e)
         return sat_dict

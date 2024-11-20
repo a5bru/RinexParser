@@ -38,3 +38,7 @@ This is the inertial release
 ### Changed
 - RinexObsReader: method read_satellite correct parsing ob decriptors
 
+## 1.0.3 - 2024-11-20
+### Fixed
+- RinexobsReader: index error
+
