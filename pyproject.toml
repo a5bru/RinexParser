@@ -17,6 +17,10 @@ classifieres = [
   "Development Status :: 4 - Beta",
   "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
 ]
+dependencies = [
+  "netCDF4>=1.7.2",
+  "pytz",
+]
 
 [project.urls]
 Homepage = "https://github.com/a5bru/RinexParser"

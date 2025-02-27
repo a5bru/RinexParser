@@ -129,6 +129,9 @@ class RinexObsReader(object):
         else:
             return False
         return re.match(filename_regex, filename) is not None
+    
+    def set_rinex_obs_file(self, rinex_obs_file: str):
+        raise NotImplementedError
 
     def correct_year2(self, year2):
         """
@@ -440,7 +443,8 @@ class Rinex2ObsReader(RinexObsReader):
                             satellites=rnx_epoch["satellites"],
                             rcv_clock_offset=self.header.rcv_clock_offset
                         )
-                        if rinex_epoch.is_valid():
+                        # if rinex_epoch.is_valid():
+                        if True:
                             self.rinex_epochs.append(rinex_epoch)
 
             if len(rinex_obs["epochs"]) > 0:

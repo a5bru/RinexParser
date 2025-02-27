@@ -179,6 +179,8 @@ class RinexEpoch(object):
         nos = len(self.satellites)
         data_lines = ""
 
+        print(self.__dict__)
+
         data_lines += "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}".format(
             epoch_time=self.timestamp.strftime(cc.RINEX3_FORMAT_OBS_TIME),
             epoch_flag=self.epoch_flag,
