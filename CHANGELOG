@@ -38,3 +38,11 @@ This is the inertial release
 ### Changed
 - RinexObsReader: method read_satellite correct parsing ob decriptors
 
+## 1.0.3 - 2025-02-27
+- Reset everything
+
+## 1.0.4 - 2025-02-27
+- CHG: moved rinex_parser into src directory
+- CHG: changed logger to INFO
+- ADD: pyproject.toml
+
