@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "RinexParser"
-version = "1.0.3"
+version = "1.0.4"
 authors = [
   { name="Juergen Fredriksson", email="surveyor@quantentunnel.de" },
 ]
@@ -18,7 +18,6 @@ classifieres = [
   "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
 ]
 dependencies = [
-  "netCDF4>=1.7.2",
   "pytz",
 ]
 

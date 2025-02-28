@@ -45,4 +45,6 @@ This is the inertial release
 - CHG: moved rinex_parser into src directory
 - CHG: changed logger to INFO
 - ADD: pyproject.toml
-
+- CHG: README.md
+- CHG: obs_reader.py - to_rinex3(), parser, interval filter
+- CHG: obs_header.py - to_rinex3()

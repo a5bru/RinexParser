@@ -5,6 +5,7 @@ Created on Nov 10, 2016
 '''
 
 import datetime
+import traceback
 from rinex_parser import constants as cc
 from rinex_parser.logger import logger
 
@@ -14,7 +15,7 @@ class RinexEpoch(object):
     classdocs
     '''
 
-    def __init__(self, **kwargs):
+    def __init__(self, timestamp, observation_types, satellites, **kwargs):
         '''
         Constructor
         Args:
@@ -25,9 +26,9 @@ class RinexEpoch(object):
             epoch_flag: int, Epoch Flag (default 0)
             rcv_clock_offset: float, Offset of Receiver (default 0.0)
         '''
-        self.timestamp = kwargs.get("timestamp")
-        self.observation_types = kwargs.get("observation_types")
-        self.satellites = kwargs.get("satellites")
+        self.timestamp: datetime.datetime = timestamp
+        self.observation_types = observation_types
+        self.satellites = satellites
         self.epoch_flag = kwargs.get("epoch_flag", 0)
         self.rcv_clock_offset = kwargs.get("rcv_clock_offset", 0.)
 
@@ -79,7 +80,9 @@ class RinexEpoch(object):
             d = "{:d}".format(
                 int(val))
             if d == "0":
-                raise KeyError
+                d = " "
+            # if d == "0":
+            #     raise KeyError
         except:
             d = " "
         return d
@@ -179,29 +182,53 @@ class RinexEpoch(object):
         nos = len(self.satellites)
         data_lines = ""
 
-        print(self.__dict__)
+        rco = self.rcv_clock_offset if self.rcv_clock_offset else " "
 
         data_lines += "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}".format(
             epoch_time=self.timestamp.strftime(cc.RINEX3_FORMAT_OBS_TIME),
             epoch_flag=self.epoch_flag,
             nos=nos,
             empty="",
-            rcvco=self.rcv_clock_offset
-        )
-        for i in range(nos):
-            new_data = "\n{:3s}".format(self.satellites[i]["id"])
-            for ot in self.observation_types:
-                if self.satellites[i]["observations"].has_key(ot):
-                    val = self.get_val(self.satellites[i]["observations"][ot])
-                    lli = self.get_d(
-                        self.satellites[i]["observations"][ot + "_lli"])
-                    ss = self.get_d(
-                        self.satellites[i]["observations"][ot + "_ss"])
-                    new_data += "{}{}{}".format(val, lli, ss)
+            rcvco=rco,
+        ).strip() + "\n"
 
-                else:
-                    new_data += "{:16s}".format("")
-            data_lines += new_data
+        # sort order
+
+        sat_sys_order = "GRECJS"
+        sat_sys_block = {}
+        for sat_sys in sat_sys_order:
+            sat_sys_block[sat_sys] = []
+
+        # self.observation_types {"G": {"obs_types": [..]}, "R": {...}, ...}
+        for _, item in enumerate(self.satellites):
+            # item {"id": "G01", "observations": {"C1C_[value,lli,ss]": ...}}
+            try:
+                sat_sys = item["id"][0]  # G,R,E,C...
+                obs_codes = self.observation_types[sat_sys]["obs_types"]
+                new_data = "{:3s}".format(item["id"])
+                for obs_code in obs_codes:
+                    try:               
+                        val = self.get_val(item["observations"][f"{obs_code}_value"])
+                        lli = self.get_d(item["observations"][f"{obs_code}_lli"])
+                        ssi = self.get_d(item["observations"][f"{obs_code}_ssi"])
+                        if obs_code.startswith("L") and ssi != " " and lli == " ":
+                            lli = "0"
+                        new_data += f"{val}{lli}{ssi}"
+                    except KeyError:
+                        # Satellite does not have this code
+                        new_data += " " * 16
+                    except Exception as e:
+                        traceback.print_exc()
+                        new_data += " " * 16
+
+                sat_sys_block[sat_sys].append(new_data.strip())
+            except Exception as e:
+                print(e)
+
+        sat_blocks = []
+        for sat_sys in sat_sys_order:
+            sat_blocks += sat_sys_block[sat_sys]
+        data_lines += "\n".join(sat_blocks)
 
         return data_lines
 

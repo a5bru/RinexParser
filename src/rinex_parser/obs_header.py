@@ -488,6 +488,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             rinex_header = "{}\n{}".format(rinex_header, com)
 
         if self.other_headers:
+            rinex_header += "\n"
             rinex_header += "\n".join(self.other_headers)
 
         return "{}\n{:60s}END OF HEADER".format(rinex_header, "")
@@ -588,12 +589,12 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
                 #     ss,
                 #     len(self.sys_obs_types[ss]["obs_types"])
                 # )
-                temp = f"{ss}   {len(self.sys_obs_types[ss]['obs_types']):3d}"
+                temp = f"{ss}  {len(self.sys_obs_types[ss]['obs_types']):3d}"
                 for i, v in enumerate(self.sys_obs_types[ss]["obs_types"]):
                     temp += f" {v:3s}"
                     if (i % 13 == 12) and (i > 1):
                         sot += f"{temp:60s}SYS / # / OBS TYPES".strip() + "\n"
-                        temp = " "*7
+                        temp = " "*6
                 sot += f"{temp:60s}SYS / # / OBS TYPES"
             if ss != "S":
                 sot += "\n"
