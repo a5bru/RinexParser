@@ -7,6 +7,7 @@ Created on Nov 7, 2016
 import datetime
 import re
 import abc
+import traceback
 
 from rinex_parser import constants as c
 from rinex_parser.logger import logger
@@ -19,6 +20,7 @@ class RinexObsHeader(object):
     __metaclass__ = abc.ABCMeta
 
     RE_HEADER_TYPES_OF_OBSERV = re.compile(c.RINEX2_HEADER_OBSERVATION_TYPES)
+    RE_HEADER_OBS_DESCRIPTOR = c.RINEX2_HEADER_OBS_DESCRIPTOR
 
     def __init__(self, **kwargs):
         self.comment = kwargs.get("comment", "")
@@ -26,8 +28,8 @@ class RinexObsHeader(object):
         self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
         self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
         self.satellites = {}
-        self.program = "APOS.dama"
-        self.run_by = kwargs.get("run_by", "BEV/V15 APOS")
+        # self.program = "APOS.dama"
+        self.run_by = kwargs.get("run_by", "ASBRU")
         self.run_date = kwargs.get("run_date", datetime.datetime.now().strftime("%FT%H:%MZ"))
         self.marker_name = kwargs.get("marker_name")
         self.marker_number = kwargs.get("marker_number")
@@ -47,7 +49,7 @@ class RinexObsHeader(object):
         self.wavelength_fact_l1 = kwargs.get("wavelength_fact_l1", None)
         self.wavelength_fact_l2 = kwargs.get("wavelength_fact_l2", None)
         self.wavelength_fact = kwargs.get("wavelength_fact", None)
-        self.observation_types = kwargs.get("observation_types", None)
+        self.observation_types = kwargs.get("observation_types", [])
         self.interval = kwargs.get("interval", None)
         self.first_observation = kwargs.get("first_observation", None)
         self.last_observation = kwargs.get("last_observation", None)
@@ -56,6 +58,17 @@ class RinexObsHeader(object):
         self.leap_seconds = kwargs.get("leap_seconds", None)
         self.total_satellites = 0
         self.empty = ""
+        self.sys_obs_types = {}
+        self.other_headers = []
+
+    @property
+    def datadict(self) -> dict:
+        d = {
+            "marker_name": self.marker_name,
+            "marker_number": self.marker_number,
+            "sys_obs_types": self.sys_obs_types,
+        }
+        return d
 
     @classmethod
     def from_header(cls, header_string):
@@ -70,6 +83,7 @@ class RinexObsHeader(object):
             tmp_header.set_header(header_lines=header_string)
             return tmp_header
         except Exception as e:
+            traceback.print_exc()
             logger.error(e)
             return None
 
@@ -83,6 +97,9 @@ class RinexObsHeader(object):
             "file_type": file_type,
             "satellite_system": satellite_system,
         }
+    
+    def to_rinex3(self, *args):
+        raise NotImplementedError
 
     def set_interval(self, line):
         self.interval = int(float(line.split()[0].strip()))
@@ -94,7 +111,7 @@ class RinexObsHeader(object):
         self.satellite_system = d["satellite_system"]
 
     def set_pgm_by_date(self, line):
-        # self.program = line[:20].strip()
+        self.program = line[:20].strip()
         self.run_by = line[20:40].strip()
         self.run_date = line[40:60].strip()
 
@@ -102,7 +119,9 @@ class RinexObsHeader(object):
         # new_comment = line[:60].strip()
         new_comment = line
         if self.comment == "":
-            self.comment = new_comment
+            add_comment = f"{'RinexParser-1.0.3':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime('%Y%m%d %H%M%S UTC'):20s}COMMENT"
+            self.comment = f"{add_comment:80s}\n"
+            self.comment += f"{new_comment:80s}"
         else:
             self.comment = "%s\n%s" % (self.comment, new_comment)
 
@@ -152,7 +171,7 @@ class RinexObsHeader(object):
         d = m.groupdict()
         if d["noo"].strip() != "":
             self.observation_types_number = int(d["noo"])
-        observation_types = re.finditer(c.RINEX2_HEADER_OBS_DESCRIPTOR, line)
+        observation_types = re.finditer(self.RE_HEADER_OBS_DESCRIPTOR, line)
         if self.observation_types is None:
             self.observation_types = []
         self.observation_types += observation_types
@@ -192,60 +211,64 @@ class RinexObsHeader(object):
                 break
 
             # RINEX VERSION / TYPE
-            if "RINEX VERSION / TYPE" in header_label:
+            elif "RINEX VERSION / TYPE" in header_label:
                 self.set_version_type(line)
                 # logger.debug("Rinex Version: '%f'" % self.format_version)
 
-            if 'PGM / RUN BY / DATE' in header_label:
+            elif 'PGM / RUN BY / DATE' in header_label:
                 self.set_pgm_by_date(line)
 
-            if 'COMMENT' in header_label:
+            elif 'COMMENT' in header_label:
                 self.set_comment(line)
 
-            if 'MARKER NAME' in header_label:
+            elif 'MARKER NAME' in header_label:
                 self.set_marker_name(line)
 
-            if 'MARKER NUMBER' in header_label:
+            elif 'MARKER NUMBER' in header_label:
                 self.set_marker_number(line)
 
-            if 'OBSERVER / AGENCY' in header_label:
+            elif 'OBSERVER / AGENCY' in header_label:
                 self.set_observer_agency(line)
 
-            if 'REC # / TYPE / VERS' in header_label:
+            elif 'REC # / TYPE / VERS' in header_label:
                 self.set_receiver(line)
 
-            if 'ANT # / TYPE' in header_label:
+            elif 'ANT # / TYPE' in header_label:
                 self.set_antenna(line)
 
-            if 'APPROX POSITION XYZ' in header_label:
+            elif 'APPROX POSITION XYZ' in header_label:
                 self.set_approx_position(line)
 
-            if 'ANTENNA: DELTA H/E/N' in header_label:
+            elif 'ANTENNA: DELTA H/E/N' in header_label:
                 self.set_antenna_delta(line)
 
-            if 'WAVELENGTH FACT L1/2' in header_label:
+            elif 'WAVELENGTH FACT L1/2' in header_label:
                 self.set_wavelength_fact(line)
 
-            if '# / TYPES OF OBSERV' in header_label:
+            elif '# / TYPES OF OBSERV' in header_label:
                 self.set_observation_types(line)
 
-            if 'INTERVAL' in header_label:
+            elif 'INTERVAL' in header_label:
                 self.set_interval(line)
 
-            if 'TIME OF FIRST OBS' in header_label:
+            elif 'TIME OF FIRST OBS' in header_label:
                 self.set_first_observation(line)
 
-            if 'TIME OF LAST OBS' in header_label:
+            elif 'TIME OF LAST OBS' in header_label:
                 self.set_last_observation(line)
 
-            if 'RCV CLOCK OFFS APPL' in header_label:
+            elif 'RCV CLOCK OFFS APPL' in header_label:
                 self.set_rcv_clock_offset(line)
 
-            if 'LEAP SECONDS' in header_label:
+            elif 'LEAP SECONDS' in header_label:
                 self.set_leap_seconds(line)
 
-            if '# OF SATELLITES' in header_label:
+            elif '# OF SATELLITES' in header_label:
                 self.set_total_satellites(line)
+
+            else:
+                # parse remaining headers
+                self.other_headers.append(line)
 
 
 class Rinex2ObsHeader(RinexObsHeader):
@@ -307,8 +330,9 @@ class Rinex2ObsHeader(RinexObsHeader):
             r2h += "\n{:6d}{:54s}# OF SATELLITES"
         return "{}\n{:60s}END OF HEADER".format(r2h, "")
 
-    def get_observation_types(self):
+    def get_observation_types(self) -> str:
         ots = []
+        s = ""
         for ot in self.observation_types:
             if ot == "C1C" and self.rinex_export_version == 2:
                 ot = "C1"
@@ -334,6 +358,7 @@ class Rinex2ObsHeader(RinexObsHeader):
 class Rinex3ObsHeader(Rinex2ObsHeader):
 
     RE_SYS_OBS_TYPE = re.compile(c.RINEX3_FORMAT_SYS_OBS_TYPES)
+    RE_HEADER_OBS_DESCRIPTOR = c.RINEX3_HEADER_OBS_DESCRIPTOR
 
     def __init__(self, **kwargs):
         """
@@ -407,15 +432,20 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if adx:
             rinex_header += "\n%s" % adx
 
-        ots = self.get_observation_types()
+        ots = self.get_observation_types().strip()
         if ots:
             rinex_header += "\n%s" % ots
+            rinex_header += "\n{wavelength_fact_l1:6d}{wavelength_fact_l2:6d}{wavelength_fact:6d}{empty:42s}WAVELENGTH FACT L1/L2".format(
+                ots=self.get_observation_types(),
+                **self.__dict__
+            )
 
-        rinex_header += """\n{interval:10.3f}{empty:50s}INTERVAL
-{wavelength_fact_l1:6d}{wavelength_fact_l2:6d}{wavelength_fact:6d}{empty:42s}WAVELENGTH FACT L1/L2""".format(
-            ots=self.get_observation_types(),
-            **self.__dict__
-        )
+        sot = self.get_sys_obs_types().strip()
+        if sot:
+            rinex_header += f"\n{sot}"
+
+        rinex_header += f"\n{self.interval:10.3f}{' ':50s}INTERVAL"
+        
         if self.first_observation is not None:
             rinex_header += "\n{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF FIRST OBS".format(
                 time_of_obs=self.first_observation.strftime(
@@ -433,6 +463,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if self.rcv_clock_offset is not None:
             rinex_header += "\n{:6d}{:54s}RCV CLOCK OFFS APPL".format(
                 self.rcv_clock_offset, "")
+            
         if self.total_satellites > 0:
             rinex_header += "\n{:6d}{:54s}# OF SATELLITES"
 
@@ -455,6 +486,10 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         com = self.get_center_mass_xyz()
         if com:
             rinex_header = "{}\n{}".format(rinex_header, com)
+
+        if self.other_headers:
+            rinex_header += "\n"
+            rinex_header += "\n".join(self.other_headers)
 
         return "{}\n{:60s}END OF HEADER".format(rinex_header, "")
 
@@ -548,18 +583,19 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             return None
         sot = ""
         for ss in c.RINEX3_SATELLITE_SYSTEMS:
+            
             if ss in self.sys_obs_types:
-                temp = "{}  {:3d}".format(
-                    ss,
-                    self.sys_obs_types[ss]["obs_amount"]
-                )
-                for i in range(len(self.sys_obs_types[ss]["obs_types"])):
-                    if (i % 13 == 0) and (i != 0):
-                        temp = "{:60s}SYS / # / OBS TYPES\n{:6s}".format(
-                            temp, "")
-                    temp += "{:3s}".format(
-                        self.sys_obs_types[ss]["obs_types"][i])
-                sot += "{:60s}SYS / # / OBS TYPES".format(temp)
+                # sot += "{}  {:3d}".format(
+                #     ss,
+                #     len(self.sys_obs_types[ss]["obs_types"])
+                # )
+                temp = f"{ss}  {len(self.sys_obs_types[ss]['obs_types']):3d}"
+                for i, v in enumerate(self.sys_obs_types[ss]["obs_types"]):
+                    temp += f" {v:3s}"
+                    if (i % 13 == 12) and (i > 1):
+                        sot += f"{temp:60s}SYS / # / OBS TYPES".strip() + "\n"
+                        temp = " "*6
+                sot += f"{temp:60s}SYS / # / OBS TYPES"
             if ss != "S":
                 sot += "\n"
 
@@ -766,7 +802,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         Args:
             header_lines: str, Lines are separated by "\n"
         """
-        super(Rinex3ObsHeader, self).set_header(header_lines)
+        # super(Rinex3ObsHeader, self).set_header(header_lines)
         last_sat_sys_ps = ""
         last_sat_sys_ps_cp = ""
         # last_sat_sys_ot = ""
@@ -776,73 +812,123 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             if line == "":
                 continue
 
-            if "END OF HEADER" in line:
+            if "END OF HEADER" in line[60:]:
                 break
 
             header_label = line[60:]
-            if 'MARKER TYPE' in header_label:
+
+            if "RINEX VERSION / TYPE" in header_label:
+                self.set_version_type(line)
+
+            elif 'PGM / RUN BY / DATE' in header_label:
+                self.set_pgm_by_date(line)
+
+            elif 'COMMENT' in header_label:
+                self.set_comment(line)
+
+            elif 'MARKER NAME' in header_label:
+                self.set_marker_name(line)
+
+            elif 'MARKER NUMBER' in header_label:
+                self.set_marker_number(line)
+            
+            elif 'MARKER TYPE' in header_label:
                 self.set_marker_type(line)
 
-            if 'ANTENNA: DELTA X/Y/Z' in header_label:
+            elif 'OBSERVER / AGENCY' in header_label:
+                self.set_observer_agency(line)
+
+            elif 'REC # / TYPE / VERS' in header_label:
+                self.set_receiver(line)
+
+            elif 'ANT # / TYPE' in header_label:
+                self.set_antenna(line)
+
+            elif 'APPROX POSITION XYZ' in header_label:
+                self.set_approx_position(line)
+
+            elif 'ANTENNA: DELTA H/E/N' in header_label:
+                self.set_antenna_delta(line)
+
+            elif 'WAVELENGTH FACT L1/2' in header_label:
+                self.set_wavelength_fact(line)
+
+            elif '# / TYPES OF OBSERV' in header_label:
+                self.set_observation_types(line)
+
+            elif 'INTERVAL' in header_label:
+                self.set_interval(line)
+
+            elif 'TIME OF FIRST OBS' in header_label:
+                self.set_first_observation(line)
+
+            elif 'TIME OF LAST OBS' in header_label:
+                self.set_last_observation(line)
+
+            elif 'RCV CLOCK OFFS APPL' in header_label:
+                self.set_rcv_clock_offset(line)
+
+            elif '# OF SATELLITES' in header_label:
+                self.set_total_satellites(line)
+
+            elif 'ANTENNA: DELTA X/Y/Z' in header_label:
                 self.set_antenna_delta_xyz(line)
 
-            if 'ANTENNA: PHASECENTER' in header_label:
+            elif 'ANTENNA: PHASECENTER' in header_label:
                 self.set_antenna_phasecenter(line)
 
-            if 'ANTENNA: B.SIGHT XYZ' in header_label:
+            elif 'ANTENNA: B.SIGHT XYZ' in header_label:
                 self.set_antenna_b_sight_xyz(line)
 
-            if 'ANTENNA: ZERODIR AZI' in header_label:
+            elif 'ANTENNA: ZERODIR AZI' in header_label:
                 self.set_antenna_zerodir_azi(line)
 
-            if 'ANTENNA: ZERODIR XYZ' in header_label:
+            elif 'ANTENNA: ZERODIR XYZ' in header_label:
                 self.set_antenna_zerodir_xyz(line)
 
-            if 'CENTER OF MASS: XYZ' in header_label:
+            elif 'CENTER OF MASS: XYZ' in header_label:
                 self.set_center_mass_xyz(line)
 
-            if 'SYS / # / OBS TYPES' in header_label:
+            elif 'SYS / # / OBS TYPES' in header_label:
                 self.set_sys_obs_types(line)
 
-            if 'SIGNAL STRENGTH UNIT' in header_label:
-                self.set_signal_strength_unit(line)
+            # elif 'SIGNAL STRENGTH UNIT' in header_label:
+            #     self.set_signal_strength_unit(line)
 
-            if 'SYS / DCBS APPLIED' in header_label:
+            elif 'SYS / DCBS APPLIED' in header_label:
                 self.set_sys_dcbs_applied(line)
 
-            if 'SYS / PCVS APPLIED' in header_label:
+            elif 'SYS / PCVS APPLIED' in header_label:
                 self.set_sys_pcvs_applied(line)
 
-            if 'SYS / SCALE FACTOR' in header_label and line[0] != " ":
+            elif 'SYS / SCALE FACTOR' in header_label and line[0] != " ":
                 sf = self.set_sys_scale_factor(line)
                 last_sat_sys_sf = sf["satellite_system"]
 
-            if 'SYS / SCALE FACTOR' in header_label and line[0] == " ":
-                self.set_sys_scale_factor_extra(line, last_sat_sys_sf)
+            # elif 'SYS / SCALE FACTOR' in header_label and line[0] == " ":
+            #     self.set_sys_scale_factor_extra(line, last_sat_sys_sf)
 
-            if 'SYS / PHASE SHIFT' in header_label and line[0] != " ":
-                ps = self.set_phase_shift(line)
-                last_sat_sys_ps = ps["satellite_system"]
-                last_sat_sys_ps_cp = ps["carrier_phase"]
+            # elif 'SYS / PHASE SHIFT' in header_label and line[0] != " ":
+            #     ps = self.set_phase_shift(line)
+            #     last_sat_sys_ps = ps["satellite_system"]
+            #     last_sat_sys_ps_cp = ps["carrier_phase"]
 
-            if 'SYS / PHASE SHIFT' in header_label and line[0] == " ":
-                self.set_phase_shift_extra(
-                    line, last_sat_sys_ps, last_sat_sys_ps_cp
-                )
+            # elif 'SYS / PHASE SHIFT' in header_label and line[0] == " ":
+            #     self.set_phase_shift_extra(
+            #         line, last_sat_sys_ps, last_sat_sys_ps_cp
+            #     )
 
-            if 'GLONASS SLOT / FRQ #' in header_label and line[0:3].strip() != "":
-                self.set_glonass_slot_frq(line)
+            # elif 'GLONASS SLOT / FRQ #' in header_label and line[0:3].strip() != "":
+            #     self.set_glonass_slot_frq(line)
 
-            if 'GLONASS SLOT / FRQ #' in header_label and line[0:3].strip() == "":
-                self.set_glonass_slot_frq_extra(line)
+            # elif 'GLONASS SLOT / FRQ #' in header_label and line[0:3].strip() == "":
+            #     self.set_glonass_slot_frq_extra(line)
 
-            if 'GLONASS COD/PHS/BIS' in header_label:
-                self.set_glonass_cod_phs_bis(line)
+            # elif 'GLONASS COD/PHS/BIS' in header_label:
+            #     self.set_glonass_cod_phs_bis(line)
 
-            if 'LEAP SECONDS' in header_label:
-                self.set_leap_seconds(line)
+            # elif 'LEAP SECONDS' in header_label:
+            #     self.set_leap_seconds(line)
 
-            if 'PRN / # OF OBS' in header_label:
-                pass
-                # logger.debug(
-                #     "Feature 'PRN / # OF OBS' not implemented yet, sorry...")
+            else:
+                self.other_headers.append(line)
