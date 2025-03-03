@@ -1,4 +1,3 @@
 nose
 flake8
 pytz
-netCDF4
