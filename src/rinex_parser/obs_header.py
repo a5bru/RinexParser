@@ -488,7 +488,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             rinex_header = "{}\n{}".format(rinex_header, com)
 
         if self.other_headers:
-            rinex_header += "\n"
             rinex_header += "\n".join(self.other_headers)
 
         return "{}\n{:60s}END OF HEADER".format(rinex_header, "")
