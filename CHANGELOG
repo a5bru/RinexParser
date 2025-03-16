@@ -48,3 +48,7 @@ This is the inertial release
 - CHG: README.md
 - CHG: obs_reader.py - to_rinex3(), parser, interval filter
 - CHG: obs_header.py - to_rinex3()
+
+## 1.1.0 - 2025-03-16
+- NEW: Filter observation types that are not used
+- REM: Pipfile, using pyproject.toml now
