@@ -333,6 +333,10 @@ class Rinex2ObsReader(RinexObsReader):
                 else:
                     obs_ss = int(obs_ss)
 
+            if obs_val is None:
+                # Do not store empty obs_type
+                continue
+
             sat_dict["observations"].update(
                 {
                     obs_type + "_value": obs_val,
@@ -483,16 +487,7 @@ class Rinex3ObsReader(RinexObsReader):
         Constructor, use the same as Rinex2ObsReader
         '''
         super(Rinex3ObsReader, self).__init__(**kwargs)
-        # assert self.is_valid_filename(
-        #     os.path.basename(self.rinex_obs_file), self.header.format_version)
-        # m = re.match(self.RINEX_FILE_NAME_REGEX, os.path.basename(self.rinex_obs_file))
 
-        # d = m.groupdict()
-        # self.station = d["station"]
-        # self.doy = int(d["doy"])
-        # self.year = int(d["year4"])
-        # self.file_period = d["file_period"]
-        # self.rinex_file_sequence = -1  # g[6]
 
     def set_rinex_obs_file(self, rinex_obs_file):
         self.rinex_obs_file = rinex_obs_file

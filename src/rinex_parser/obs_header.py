@@ -58,7 +58,7 @@ class RinexObsHeader(object):
         self.leap_seconds = kwargs.get("leap_seconds", None)
         self.total_satellites = 0
         self.empty = ""
-        self.sys_obs_types = {}
+        self.sys_obs_types = {}  # {"G": {"obs_types": [..]}, "R": {...}, ...}
         self.other_headers = []
 
     @property

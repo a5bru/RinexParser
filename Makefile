@@ -25,8 +25,7 @@ buildEgg:
 	pipenv run python setup.py bdist_wheel
 
 prepareVenv:
-	pipenv install
-	#virtualenv --python=python3 ${VIRTUALENV_DIR}
+	virtualenv --python=python3 ${VIRTUALENV_DIR}
 
 setupVenv:
 	pip install -r requirements.txt

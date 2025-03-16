@@ -68,6 +68,30 @@ class RinexParser():
         # logger.info("done with header")
         self.rinex_reader.read_data_to_dict()
 
+    def do_clear_datadict(self):
+        """Read all epochs and find empty obs types and remove them from header."""
+        all_epochs = len(self.datadict["epochs"])
+        found_obs_types = {}
+        input_obs_types = {}
+        for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
+            found_obs_types[sat_sys] = set()
+
+        # go through all epochs and satellites and their obs types
+        for rinex_epoch in self.rinex_reader.rinex_epochs:
+            for _, item in enumerate(rinex_epoch.satellites):
+                sat_sys = item["id"][0]  # GREC
+                for sat_obs in item["observations"].keys():
+                    if sat_obs.endswith("_value"):
+                        obs_type = sat_obs.split("_")[0]
+                        found_obs_types[sat_sys].add(obs_type)
+
+        # go through all obs types from header and remove those who are not listed
+        for sat_sys in self.rinex_reader.header.sys_obs_types:
+            input_obs_types[sat_sys] = set(self.rinex_reader.header.sys_obs_types[sat_sys]["obs_types"])
+            for obs_type in input_obs_types[sat_sys] - found_obs_types[sat_sys]:
+                logger.info(f"Remove unused OBS TYPE {obs_type}")
+                self.rinex_reader.header.sys_obs_types[sat_sys]["obs_types"].remove(obs_type)
+
     def run(self):
         assert os.path.isfile(self.rinex_file), f"Not a file ({self.rinex_file})"
         self.do_create_datadict()
