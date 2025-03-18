@@ -193,7 +193,7 @@ class RinexObsReader(object):
         Adds satellite to satellite list if not already added
 
         Args:
-            satellite: Satid as str regexp '[GR][ \d]{2}'
+            satellite: Satid as str regexp '[GR][ \\d]{2}'
         """
         if satellite not in self.header.satellites:
             self.header.satellites[satellite] = 0
@@ -642,7 +642,7 @@ class Rinex3ObsReader(RinexObsReader):
                     chunk = chunk[14:]
                     lli = chunk[0]
                     chunk = chunk[1:]
-                    ssi = chunk[15]
+                    ssi = chunk[0]
                     chunk = chunk[1:]
                 except:
                     pass

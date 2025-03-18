@@ -52,3 +52,6 @@ This is the inertial release
 ## 1.1.0 - 2025-03-16
 - NEW: Filter observation types that are not used
 - REM: Pipfile, using pyproject.toml now
+- ADD: Constants for time formatting
+- FIX: Faster Rinex Epoch preparation
+- ADD: Entrypoint *ridah-main*

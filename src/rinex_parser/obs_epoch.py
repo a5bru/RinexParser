@@ -4,11 +4,29 @@ Created on Nov 10, 2016
 @author: jurgen
 """
 
-import datetime
 import traceback
 from rinex_parser import constants as cc
 from rinex_parser.logger import logger
 
+def ts_epoch_to_list(line: str) -> list:
+    """Use epoch line and generate list of [y, m, d, H, M, S]."""
+    y = int(line[2:6])
+    m = int(line[7:9])
+    d = int(line[10:12])
+    H = int(line[13:15])
+    M = int(line[16:18])
+    S = float(line[18:30])
+    return [y, m, d, H, M, S]
+
+
+def ts_epoch_to_header(epoch: str) -> str:
+    """Convert date from epoch format to header format."""
+    # > 2025 03 16 00 00  0.0000000  0 37
+    #   2025    03    17    19    00   00.0000000     GPS         TIME OF FIRST OBS
+    line = f"> {epoch}"
+    y, m, d, H, M, S = ts_epoch_to_list(line)
+    s = f"  {y}    {m:02d}    {d:02d}    {H:02d}    {M:02d}  {S:11.7f}"
+    return s
 
 class RinexEpoch(object):
     """
@@ -87,21 +105,19 @@ class RinexEpoch(object):
             if val is None:
                 raise ValueError
             v = "{:14.3f}".format(float(val))
-        except:
+        except Exception as e:
+            # logger.error(e)
             v = " " * 14
         return v
 
     @staticmethod
     def get_d(val):
         try:
-            #             if val is None:
-            #                 raise ValueError
             d = "{:d}".format(int(val))
             if d == "0":
                 d = " "
-            # if d == "0":
-            #     raise KeyError
-        except:
+        except Exception as e:
+            # logger.error(e)
             d = " "
         return d
 
@@ -229,23 +245,31 @@ class RinexEpoch(object):
             try:
                 sat_sys = item["id"][0]  # G,R,E,C...
                 obs_codes = self.observation_types[sat_sys]["obs_types"]
-                new_data = "{:3s}".format(item["id"])
-                for obs_code in obs_codes:
+                new_sparse = ""
+                new_data = ""
+                for obs_code in obs_codes[::-1]:
                     try:
                         val = self.get_val(item["observations"][f"{obs_code}_value"])
                         lli = self.get_d(item["observations"][f"{obs_code}_lli"])
                         ssi = self.get_d(item["observations"][f"{obs_code}_ssi"])
                         if obs_code.startswith("L") and ssi != " " and lli == " ":
                             lli = "0"
-                        new_data += f"{val}{lli}{ssi}"
+                        new_part = f"{val}{lli}{ssi}"
                     except KeyError:
                         # Satellite does not have this code
-                        new_data += " " * 16
+                        new_part = " " * 16
                     except Exception as e:
                         traceback.print_exc()
-                        new_data += " " * 16
+                        new_part = " " * 16
+                    finally:
+                        if new_part.strip() != "":
+                            new_sparse = " " * 16
+                        else:
+                            new_part = new_sparse
+                        new_data = f"{new_part}{new_data}"
 
-                sat_sys_block[sat_sys].append(new_data.strip())
+                new_data = f"{item['id']:3s}{new_data}"
+                sat_sys_block[sat_sys].append(new_data)
             except Exception as e:
                 print(e)
 

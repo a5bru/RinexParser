@@ -52,8 +52,8 @@ class RinexObsHeader(object):
         self.wavelength_fact = kwargs.get("wavelength_fact", None)
         self.observation_types = kwargs.get("observation_types", [])
         self.interval = kwargs.get("interval", None)
-        self.first_observation = kwargs.get("first_observation", None)
-        self.last_observation = kwargs.get("last_observation", None)
+        self.first_observation:str = kwargs.get("first_observation", None)
+        self.last_observation:str = kwargs.get("last_observation", None)
         self.time_system = kwargs.get("time_system", None)
         self.rcv_clock_offset = kwargs.get("rcv_clock_offset", None)
         self.leap_seconds = kwargs.get("leap_seconds", None)
@@ -122,7 +122,7 @@ class RinexObsHeader(object):
         new_lines = []
         if self.comment == "":
             new_lines.append(
-                f"{'RinexParser-1.0.3':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATE):15s} UTC COMMENT"
+                f"{'RinexParser-1.1.0':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
             )
             new_lines.append(new_comment)
             self.comment = "\n".join(new_lines)
@@ -181,15 +181,11 @@ class RinexObsHeader(object):
         self.observation_types += observation_types
 
     def set_first_observation(self, line):
-        self.first_observation = datetime.datetime.strptime(
-            line[:43], c.RNX_FORMAT_OBS_TIME
-        )
+        self.first_observation = line[:43]
         self.time_system = line[43 + 5 : 43 + 5 + 3]
 
     def set_last_observation(self, line):
-        self.last_observation = datetime.datetime.strptime(
-            line[:43], c.RNX_FORMAT_OBS_TIME
-        )
+        self.last_observation = line[:43]
 
     def set_rcv_clock_offset(self, line):
         self.rcv_clock_offset = int(line[:6])
@@ -451,7 +447,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if self.first_observation is not None:
             rinex_header.append(
                 "{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF FIRST OBS".format(
-                    time_of_obs=self.first_observation.strftime(c.RNX_FORMAT_OBS_TIME),
+                    time_of_obs=self.first_observation,
                     empty="",
                     time_system=self.time_system,
                 )
@@ -459,7 +455,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if self.last_observation is not None:
             rinex_header.append(
                 "{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF LAST OBS".format(
-                    time_of_obs=self.last_observation.strftime(c.RNX_FORMAT_OBS_TIME),
+                    time_of_obs=self.last_observation,
                     empty="",
                     time_system=self.time_system,
                 )
