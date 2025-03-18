@@ -9,12 +9,14 @@
 # Copyright (c) 2018, jiargei <juergen.fredriksson@bev.gv.at>
 
 import os
+import math
 import argparse
 import datetime
 
-from rinex_parser.constants import RNX_FORMAT_DATE
+from rinex_parser.constants import RNX_FORMAT_OBS_TIME
 from rinex_parser.logger import logger
 from rinex_parser.obs_factory import RinexObsFactory, RinexObsReader
+from rinex_parser.obs_epoch import ts_epoch_to_header, ts_epoch_to_list
 
 
 def run():
@@ -48,6 +50,33 @@ class RinexParser:
     @property
     def datadict(self):
         return self.get_datadict()
+    
+    def get_rx3_long(self, country: str = "XXX") -> str:
+        code = self.rinex_reader.header.marker_name[:4]
+        ts_f = ts_epoch_to_list("> " + self.rinex_reader.rinex_epochs[0].timestamp)
+        ts_l = ts_epoch_to_list("> " + self.rinex_reader.rinex_epochs[-1].timestamp)
+        ts_f[-1] = int(ts_f[-1])
+        ts_l[-1] = int(ts_l[-1])
+        dtF = datetime.datetime(*ts_f)
+        dtL = datetime.datetime(*ts_l)
+        dtD = (dtL - dtF).total_seconds()
+        dtD_H = dtD / 3600.0
+        dtD_D = dtD_H / 24.0
+        dtD_W = dtD_D / 7.0
+        unitPeriod = "H"
+        unitCount = math.ceil(dtD_H)
+        if dtD_H > 23:
+            unitPeriod = "D"
+            unitCount = math.ceil(dtD_D)
+            if dtD_D > 7:
+                unitPeriod = "W"
+                unitCount = math.ceil(dtD_W)
+        doy = int(dtF.strftime("%03j"))
+        period = f"{unitCount:02d}{unitPeriod}"
+        # c     c     y   j  h m
+        # HKB200AUT_R_20250761900_01H_01S_MO.rnx
+        # HKB200XXX_R_20250761900_01H_30S_MO.rnx
+        return f"{code}00{country}_R_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{self.sampling:02d}S_MO.rnx"
 
     def get_datadict(self):
         d = {}
@@ -55,8 +84,8 @@ class RinexParser:
         d["epochInterval"] = self.rinex_reader.header.interval
         d["epochFirst"] = self.rinex_reader.rinex_epochs[0]["id"]
         d["epochLast"] = self.rinex_reader.rinex_epochs[-1]["id"]
-        dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_DATE)
-        dtL = datetime.datetime.strptime(d["epochLast"], RNX_FORMAT_DATE)
+        dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_OBS_TIME)
+        dtL = datetime.datetime.strptime(d["epochLast"], RNX_FORMAT_OBS_TIME)
         dtD = (dtL - dtF).total_seconds()
         dtD_H = dtD / 3600.0
         dtD_D = dtD_H / 24.0
@@ -139,3 +168,5 @@ class RinexParser:
     def run(self):
         assert os.path.isfile(self.rinex_file), f"Not a file ({self.rinex_file})"
         self.do_create_datadict()
+        self.rinex_reader.header.first_observation = ts_epoch_to_header(self.rinex_reader.rinex_epochs[0].timestamp)
+        self.rinex_reader.header.last_observation = ts_epoch_to_header(self.rinex_reader.rinex_epochs[-1].timestamp)
