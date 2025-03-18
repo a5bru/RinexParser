@@ -17,6 +17,7 @@ RINEX3_FILE = "data/r3/GRAZ00XXX_R_20182540000_01D_30S_MO.rnx"
 RINEX3_FILE = "data/r3/NSDL00AUT_R_20233250900_01H_01S_MO.rnx"
 RINEX2_FILE = "data/r2/graz2540.18o"
 
+
 class ObsReaderTestSuite(unittest.TestCase):
     """Advanced test cases."""
 
@@ -30,8 +31,10 @@ class ObsReaderTestSuite(unittest.TestCase):
             obs_parser.run()
             obs_quality = RinexQuality()
             logger.info("\n\n%s\n" % obs_quality.get_rinstat_out(obs_parser.datadict))
-            logger.info("\n\n%s\n" % obs_quality.get_rinex_availability(obs_parser.datadict))
-            logger.debug("-"*80)
+            logger.info(
+                "\n\n%s\n" % obs_quality.get_rinex_availability(obs_parser.datadict)
+            )
+            logger.debug("-" * 80)
 
         l = [
             # [2, RINEX2_FILE],
@@ -45,5 +48,5 @@ class ObsReaderTestSuite(unittest.TestCase):
             self.assertTrue(True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

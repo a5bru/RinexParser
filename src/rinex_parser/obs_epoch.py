@@ -1,8 +1,8 @@
-'''
+"""
 Created on Nov 10, 2016
 
 @author: jurgen
-'''
+"""
 
 import datetime
 import traceback
@@ -11,34 +11,50 @@ from rinex_parser.logger import logger
 
 
 class RinexEpoch(object):
-    '''
+    """
     classdocs
-    '''
+    """
 
     def __init__(self, timestamp, observation_types, satellites, **kwargs):
-        '''
+        """
         Constructor
         Args:
             timestamp: datetime, Timestamp of epoch
-            observation_types: list, List of observation types. 
+            observation_types: list, List of observation types.
                                It's order will be used for export order
             satellites: dict, including the epoch's data
             epoch_flag: int, Epoch Flag (default 0)
             rcv_clock_offset: float, Offset of Receiver (default 0.0)
-        '''
-        self.timestamp: datetime.datetime = timestamp
+        """
+        # self.timestamp: datetime.datetime = timestamp
+        self.timestamp: str = timestamp
         self.observation_types = observation_types
         self.satellites = satellites
         self.epoch_flag = kwargs.get("epoch_flag", 0)
-        self.rcv_clock_offset = kwargs.get("rcv_clock_offset", 0.)
+        self.rcv_clock_offset = kwargs.get("rcv_clock_offset", 0.0)
 
-    def get_day_seconds(self):
-        """
-        :return: int, seconds till 00:00:00 of timestamp date
-        """
-        return self.timestamp.second + self.timestamp.minute * 60 + self.timestamp * 3600
+    def to_dict(self):
+        d = {
+            # "id": self.timestamp.strftime(cc.RNX_FORMAT_DATETIME),
+            "id": self.timestamp,
+            "satellites": self.satellites,
+        }
+        return d
 
-    def is_valid(self, satellite_systems=["G"], observation_types=["L1", "L2", "L1C", "L1W"], satellites=5):
+    # def get_day_seconds(self):
+    #     """
+    #     :return: int, seconds till 00:00:00 of timestamp date
+    #     """
+    #     return (
+    #         self.timestamp.second + self.timestamp.minute * 60 + self.timestamp * 3600
+    #     )
+
+    def is_valid(
+        self,
+        satellite_systems=["G"],
+        observation_types=["L1", "L2", "L1C", "L1W"],
+        satellites=5,
+    ):
         """
         Checks if epoch suffices validity criterias. Per default these are:
 
@@ -55,7 +71,10 @@ class RinexEpoch(object):
                 i = 0
                 for satellite in self.satellites:
                     if satellite["id"].startswith(satellite_system):
-                        if observation_type in satellite["observations"] and satellite["observations"][observation_type] is not None:
+                        if (
+                            observation_type in satellite["observations"]
+                            and satellite["observations"][observation_type] is not None
+                        ):
                             i += 1
 
                 if i < satellites:
@@ -77,8 +96,7 @@ class RinexEpoch(object):
         try:
             #             if val is None:
             #                 raise ValueError
-            d = "{:d}".format(
-                int(val))
+            d = "{:d}".format(int(val))
             if d == "0":
                 d = " "
             # if d == "0":
@@ -94,7 +112,7 @@ class RinexEpoch(object):
         Args:
             sat_sys: str, Satellite System "GREJIS"
 
-        Returns: 
+        Returns:
             bool, True, if Satellite System is present, else False
         """
         for sat in self.satellites:
@@ -119,11 +137,11 @@ class RinexEpoch(object):
             for ot in self.observation_types:
                 j += 1
                 if self.satellites[i]["observations"].has_key(ot):
-                    val = self.get_val(self.satellites[i]["observations"][ot])
-                    lli = self.get_d(
-                        self.satellites[i]["observations"][ot + "_lli"])
-                    ss = self.get_d(
-                        self.satellites[i]["observations"][ot + "_ss"])
+                    val = self.get_val(
+                        self.satellites[i]["observations"][ot + "_value"]
+                    )
+                    lli = self.get_d(self.satellites[i]["observations"][ot + "_lli"])
+                    ss = self.get_d(self.satellites[i]["observations"][ot + "_ss"])
 
                     new_data = "{}{}{}".format(val, lli, ss)
                 else:
@@ -145,11 +163,12 @@ class RinexEpoch(object):
                 prn2 = "%s%s" % (prn2, self.satellites[i]["id"])
 
         header_line = " {}  {:d}{:3d}{}{:12.9f}".format(
-            self.timestamp.strftime("%y %m %d %H %M %S.0000000"),
+            # self.timestamp.strftime(cc.RINEX3_FORMAT_OBS_TIME),
+            self.timestamp,
             self.epoch_flag,
             nos,
             prn1,
-            self.rcv_clock_offset
+            self.rcv_clock_offset,
         )
 
         if prn2 != "":
@@ -164,13 +183,15 @@ class RinexEpoch(object):
         satellite_systems = []
         for satellite_system in cc.RINEX3_SATELLITE_SYSTEMS:
             for satellite in self.satellites:
-                if satellite["id"].startswith(satellite_system) and satellite_system not in satellite_systems:
+                if (
+                    satellite["id"].startswith(satellite_system)
+                    and satellite_system not in satellite_systems
+                ):
                     satellite_systems.append(satellite_system)
         return satellite_systems
 
     def from_rinex2(self, rinex):
-        """
-        """
+        """ """
         pass
 
     def to_rinex3(self):
@@ -184,13 +205,16 @@ class RinexEpoch(object):
 
         rco = self.rcv_clock_offset if self.rcv_clock_offset else " "
 
-        data_lines += "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}".format(
-            epoch_time=self.timestamp.strftime(cc.RINEX3_FORMAT_OBS_TIME),
-            epoch_flag=self.epoch_flag,
-            nos=nos,
-            empty="",
-            rcvco=rco,
-        ).strip() + "\n"
+        data_lines += (
+            "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}".format(
+                epoch_time=self.timestamp,
+                epoch_flag=self.epoch_flag,
+                nos=nos,
+                empty="",
+                rcvco=rco,
+            ).strip()
+            + "\n"
+        )
 
         # sort order
 
@@ -207,7 +231,7 @@ class RinexEpoch(object):
                 obs_codes = self.observation_types[sat_sys]["obs_types"]
                 new_data = "{:3s}".format(item["id"])
                 for obs_code in obs_codes:
-                    try:               
+                    try:
                         val = self.get_val(item["observations"][f"{obs_code}_value"])
                         lli = self.get_d(item["observations"][f"{obs_code}_lli"])
                         ssi = self.get_d(item["observations"][f"{obs_code}_ssi"])
@@ -233,5 +257,4 @@ class RinexEpoch(object):
         return data_lines
 
     def from_rinex3(self, rinex):
-        """
-        """
+        """ """
