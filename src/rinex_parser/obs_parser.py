@@ -76,7 +76,11 @@ class RinexParser:
         # c     c     y   j  h m
         # HKB200AUT_R_20250761900_01H_01S_MO.rnx
         # HKB200XXX_R_20250761900_01H_30S_MO.rnx
-        return f"{code}00{country}_R_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{self.sampling:02d}S_MO.rnx"
+        smp = self.rinex_reader.header.interval
+        if self.sampling > 0:
+            smp = self.sampling
+        smp = int(smp)
+        return f"{code}00{country}_R_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
 
     def get_datadict(self):
         d = {}
@@ -128,7 +132,6 @@ class RinexParser:
         ), f"Could not find file ({self.rinex_file})"
         self.rinex_reader.set_rinex_obs_file(self.rinex_file)
         self.rinex_reader.read_header()
-        self.rinex_reader.header.interval = self.sampling
         # logger.info("done with header")
         self.rinex_reader.read_data_to_dict()
 

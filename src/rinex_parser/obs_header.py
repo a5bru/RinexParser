@@ -27,7 +27,6 @@ class RinexObsHeader(object):
         self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
         self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
         self.satellites = {}
-        # self.program = "APOS.dama"
         self.run_by = kwargs.get("run_by", "ASBRU")
         self.run_date = kwargs.get(
             "run_date", datetime.datetime.now().strftime("%FT%H:%MZ")
@@ -52,6 +51,7 @@ class RinexObsHeader(object):
         self.wavelength_fact = kwargs.get("wavelength_fact", None)
         self.observation_types = kwargs.get("observation_types", [])
         self.interval = kwargs.get("interval", None)
+        self.sampling = kwargs.get("sampling", None)
         self.first_observation:str = kwargs.get("first_observation", None)
         self.last_observation:str = kwargs.get("last_observation", None)
         self.time_system = kwargs.get("time_system", None)
@@ -442,7 +442,11 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if sot:
             rinex_header.append(sot)
 
-        rinex_header.append(f"{self.interval:10.3f}{' ':50s}INTERVAL")
+        smp = self.interval
+        if self.sampling and self.sampling > 0:
+            smp = self.sampling
+
+        rinex_header.append(f"{smp:10.3f}{' ':50s}INTERVAL")
 
         if self.first_observation is not None:
             rinex_header.append(
