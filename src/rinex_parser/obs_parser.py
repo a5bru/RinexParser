@@ -17,12 +17,25 @@ import time
 from rinex_parser.constants import RNX_FORMAT_OBS_TIME
 from rinex_parser.logger import logger
 from rinex_parser.obs_factory import RinexObsFactory, RinexObsReader
-from rinex_parser.obs_epoch import ts_epoch_to_header, ts_epoch_to_list, ts_epoch_to_time, EPOCH_MIN, EPOCH_MAX
+from rinex_parser.obs_epoch import (
+    ts_epoch_to_header,
+    ts_epoch_to_list,
+    ts_epoch_to_time,
+    EPOCH_MIN,
+    EPOCH_MAX,
+)
+
 
 def run():
     parser = argparse.ArgumentParser(description="Analyse your Rinex files.")
     parser.add_argument("file", type=str, help="rinex file including full path")
-    parser.add_argument("version", type=int, choices=[2,3], default=3, help="rinex version (2 or 3), currently only 3 supported")
+    parser.add_argument(
+        "version",
+        type=int,
+        choices=[2, 3],
+        default=3,
+        help="rinex version (2 or 3), currently only 3 supported",
+    )
     args = parser.parse_args()
     rinex_parser = RinexParser(rinex_version=args.version, rinex_file=args.file)
     rinex_parser.run()
@@ -30,7 +43,15 @@ def run():
 
 class RinexParser:
 
-    def __init__(self, rinex_file: str, rinex_version: int, crop_beg = EPOCH_MIN, crop_end = EPOCH_MAX, *args, **kwargs):
+    def __init__(
+        self,
+        rinex_file: str,
+        rinex_version: int,
+        crop_beg=EPOCH_MIN,
+        crop_end=EPOCH_MAX,
+        *args,
+        **kwargs,
+    ):
         assert rinex_version in [
             2,
             3,
@@ -52,7 +73,7 @@ class RinexParser:
     @property
     def datadict(self):
         return self.get_datadict()
-    
+
     def get_rx3_long(self, country: str = "XXX") -> str:
         code = self.rinex_reader.header.marker_name[:4].upper()
         ts_f = ts_epoch_to_list("> " + self.rinex_reader.rinex_epochs[0].timestamp)
@@ -189,7 +210,7 @@ class RinexParser:
                 continue
             if et > self.crop_end:
                 continue
-            
+
             # SAMPLING
             # if self.crop_beg:
             #     pass
@@ -198,5 +219,9 @@ class RinexParser:
             cleared_epochs.append(epoch)
 
         self.rinex_reader.rinex_epochs = cleared_epochs
-        self.rinex_reader.header.first_observation = ts_epoch_to_header(self.rinex_reader.rinex_epochs[0].timestamp)
-        self.rinex_reader.header.last_observation = ts_epoch_to_header(self.rinex_reader.rinex_epochs[-1].timestamp)
+        self.rinex_reader.header.first_observation = ts_epoch_to_header(
+            self.rinex_reader.rinex_epochs[0].timestamp
+        )
+        self.rinex_reader.header.last_observation = ts_epoch_to_header(
+            self.rinex_reader.rinex_epochs[-1].timestamp
+        )

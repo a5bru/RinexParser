@@ -74,8 +74,21 @@ with open(out_file, "w") as rnx:
 There is an entry point that allows you to use it from the command line:
 
 ```
-usage: ridah-main [-h] [--fout FOUT] [--smp SMP] [--country COUNTRY] [--rnx-version {2,3}] finp
-ridah-main: error: the following arguments are required: finp
+usage: ridah-main [-h] [--fout FOUT] [--smp SMP] [--country COUNTRY] [--rnx-version {2,3}] [--crop-beg CROP_BEG] [--crop-end CROP_END] [--skeleton SKELETON] finp
+
+positional arguments:
+  finp                 Path to input file
+
+options:
+  -h, --help           show this help message and exit
+  --fout FOUT          Path to output file
+  --smp SMP            Sampling Rate for output
+  --country COUNTRY    Country Flag to use
+  --rnx-version {2,3}  Output rinex version. Currently only 3
+  --crop-beg CROP_BEG  Crop Window Beg, Unix Timestamp
+  --crop-end CROP_END  Crop Window End, Unix Timestamp
+  --skeleton SKELETON  Path to skeleton to edit header
+  
 ```
 
 # Notice

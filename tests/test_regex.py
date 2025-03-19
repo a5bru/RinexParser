@@ -1,9 +1,9 @@
 #!/usr/bin/python
-'''
+"""
 Created on Oct 25, 2016
 
 @author: jurgen
-'''
+"""
 import datetime
 import os
 import pprint
@@ -16,9 +16,9 @@ import unittest
 from rinex_parser.logger import logger
 from rinex_parser import constants
 
+
 class RegexTestSuite(unittest.TestCase):
     """Advanced test cases."""
-
 
     def parse_rinex3(self, rnx3_obs_line):
         all_obs = []
@@ -27,7 +27,9 @@ class RegexTestSuite(unittest.TestCase):
             regexp_dict = m.groupdict()
             if "first_o" in regexp_dict and regexp_dict["first_o"] is not None:
                 keys = ["obs", "lli", "ss"]
-                for n in re.finditer(constants.RINEX3_MULTIPLE_OBS_REGEXP, rnx3_obs_line):
+                for n in re.finditer(
+                    constants.RINEX3_MULTIPLE_OBS_REGEXP, rnx3_obs_line
+                ):
                     d = {}
                     n_filter = n.groups()[1:]
                     for i in range(len(n_filter)):
@@ -37,11 +39,7 @@ class RegexTestSuite(unittest.TestCase):
                         d.update({k: v})
                     all_obs.append(d)
             if "last_o" in regexp_dict and regexp_dict["last_o"] is not None:
-                d = {
-                    "lli": None, 
-                    "ss": None,
-                    "obs": float(regexp_dict["last_o"])
-                }
+                d = {"lli": None, "ss": None, "obs": float(regexp_dict["last_o"])}
                 all_obs.append(d)
         return all_obs
 
@@ -49,9 +47,11 @@ class RegexTestSuite(unittest.TestCase):
         d0 = datetime.datetime.now()
         rinex_file = os.path.join(
             os.path.dirname(__file__),
-            "data", "2016", "218",
+            "data",
+            "2016",
+            "218",
             # "trf2170a.16o"
-            "CSOR2180.16O"
+            "CSOR2180.16O",
         )
         logger.info("Using RNX: %s" % rinex_file)
         # ror = Rinex2ObsReader(
@@ -75,7 +75,7 @@ class RegexTestSuite(unittest.TestCase):
 
         d1 = datetime.datetime.now()
         logger.info("Took %f seconds" % (d1 - d0).total_seconds())
-    
+
     def test_rinex_3(self):
         logger.info("Test Rinex3::5")
         rnx3_obs_line = "G06  23619095.450      -53875.632 8    -41981.375 4  23619095.008          25.234"
@@ -101,6 +101,7 @@ class RegexTestSuite(unittest.TestCase):
         rnx3_obs_line = "G06    -41981.375 4"
         rnx3_obs_list = self.parse_rinex3(rnx3_obs_line)
         self.assertEqual(len(rnx3_obs_list), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,11 @@ class RinexObsHeader(object):
     RE_HEADER_OBS_DESCRIPTOR = c.RINEX2_HEADER_OBS_DESCRIPTOR
 
     def __init__(self, **kwargs):
-        self.comment = kwargs.get("comment", "")
+        self.program = kwargs.get("program", "")
+        self.comment = kwargs.get(
+            "comment",
+            f"{APP_NAME:20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT",
+        )
         self.format_version = float(kwargs.get("format_version"))
         self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
         self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
@@ -55,8 +59,8 @@ class RinexObsHeader(object):
         self.observation_types = kwargs.get("observation_types", [])
         self.interval = kwargs.get("interval", None)
         self.sampling = kwargs.get("sampling", 1.0)
-        self.first_observation:str = kwargs.get("first_observation", None)
-        self.last_observation:str = kwargs.get("last_observation", None)
+        self.first_observation: str = kwargs.get("first_observation", None)
+        self.last_observation: str = kwargs.get("last_observation", None)
         self.time_system = kwargs.get("time_system", None)
         self.rcv_clock_offset = kwargs.get("rcv_clock_offset", None)
         self.leap_seconds = kwargs.get("leap_seconds", None)
@@ -120,17 +124,18 @@ class RinexObsHeader(object):
         self.run_date = line[40:60].strip()
 
     def set_comment(self, line):
-        # new_comment = line[:60].strip()
-        new_comment = line
         new_lines = []
         if self.comment == "":
             new_lines.append(
                 f"{APP_NAME:20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
             )
-            new_lines.append(new_comment)
+            new_lines.append(line)
             self.comment = "\n".join(new_lines)
         else:
+            print(new_lines)
             self.comment += "\n".join(new_lines)
+            print(new_lines)
+        print(self.comment)
 
     def set_marker_name(self, line):
         self.marker_name = line[:60].strip()
@@ -159,9 +164,10 @@ class RinexObsHeader(object):
         self.approx_position_z = float(line[28:42])
 
     def set_antenna_delta(self, line):
-        self.antenna_delta_height = float(line[00:14])
-        self.antenna_delta_east = float(line[14:28])
-        self.antenna_delta_north = float(line[28:42])
+        x, y, z = line[:60].split()
+        self.antenna_delta_height = float(x)
+        self.antenna_delta_east = float(y)
+        self.antenna_delta_north = float(z)
 
     def set_wavelength_fact(self, line):
         self.wavelength_fact_l1 = int(line[00:6])
@@ -199,7 +205,7 @@ class RinexObsHeader(object):
     def set_total_satellites(self, line):
         self.total_satellites = int(line[:6])
 
-    def set_header(self, header_lines):
+    def set_header(self, header_lines: str):
         """
         Args:
             header_lines: str, Lines are separated by "\n"
@@ -779,7 +785,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             time_system = "GPS"
         self.leap_second_time_system = time_system
 
-    def set_header(self, header_lines):
+    def set_header(self, header_lines: str):
         """
         Args:
             header_lines: str, Lines are separated by "\n"

@@ -13,6 +13,7 @@ from rinex_parser.logger import logger
 EPOCH_MIN = datetime.datetime(1970, 1, 1).timestamp()
 EPOCH_MAX = datetime.datetime(datetime.MAXYEAR, 12, 31).timestamp()
 
+
 def ts_epoch_to_list(line: str) -> list:
     """Use epoch line and generate list of [y, m, d, H, M, S]."""
     y = int(line[2:6])
@@ -23,15 +24,18 @@ def ts_epoch_to_list(line: str) -> list:
     S = float(line[18:30])
     return [y, m, d, H, M, S]
 
+
 def ts_epoch_to_time(line: str) -> float:
     y, m, d, H, M, S = ts_epoch_to_list(line)
-    return time.mktime(time.strptime(
-        f"{y:04d}-{m:02d}-{d:02d}T{H:02d}:{M:02d}:{S:09.6f}", "%Y-%m-%dT%H:%M:%S.%f"
-    ))
+    return time.mktime(
+        time.strptime(
+            f"{y:04d}-{m:02d}-{d:02d}T{H:02d}:{M:02d}:{S:09.6f}", "%Y-%m-%dT%H:%M:%S.%f"
+        )
+    )
 
 
 def get_second_of_day(h: int, m: int, s: float) -> float:
-    return h*3600.0 + m*60.0 + s
+    return h * 3600.0 + m * 60.0 + s
 
 
 def ts_epoch_to_header(epoch: str) -> str:
@@ -42,6 +46,7 @@ def ts_epoch_to_header(epoch: str) -> str:
     y, m, d, H, M, S = ts_epoch_to_list(line)
     s = f"  {y}    {m:02d}    {d:02d}    {H:02d}    {M:02d}  {S:11.7f}"
     return s
+
 
 class RinexEpoch(object):
     """
