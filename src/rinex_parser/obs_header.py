@@ -122,7 +122,7 @@ class RinexObsHeader(object):
         new_lines = []
         if self.comment == "":
             new_lines.append(
-                f"{'RinexParser-1.1.0':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
+                f"{'RinexParser-1.1.1':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
             )
             new_lines.append(new_comment)
             self.comment = "\n".join(new_lines)

@@ -53,17 +53,31 @@ from rinex_parser.obs_parser import RinexParser
 
 input_file = "full_path_to_your.rnx"
 
-# Get Rinex File and generate Data dictionary
-rnx_parser = RinexParser(rinex_file=input_rinex, rinex_version=3)
+rnx_parser = RinexParser(rinex_file=RINEX3_FILE, rinex_version=3, sampling=30)
 rnx_parser.run()
-# Apply filter. Could be made nicer... 
-rnx_parser.rinex_reader.interval_filter = 60
-rnx_parser.rinex_reader.header.interval = 60
+
+out_file = os.path.join(
+    os.path.dirname(input_file),
+    rnx_parser.get_rx3_long()
+)
+
 # Output Rinex File
-print(rnx_parser.rinex_reader.header.to_rinex3())
-print(rnx_parser.rinex_reader.to_rinex3())
+with open(out_file, "w") as rnx:
+    logger.info(f"Write to file: {rnx_parser.get_rx3_long()}")
+    rnx.write(rnx_parser.rinex_reader.header.to_rinex3())
+    rnx.write("\n")
+    rnx.write(rnx_parser.rinex_reader.to_rinex3())
+    rnx.write("\n")
 
 ```
 
+There is an entry point that allows you to use it from the command line:
 
-Have Fun!
+```
+usage: ridah-main [-h] [--fout FOUT] [--smp SMP] [--country COUNTRY] [--rnx-version {2,3}] finp
+ridah-main: error: the following arguments are required: finp
+```
+
+# Notice
+
+This code is currently under active development and is provided as-is. The author makes no warranties, express or implied, regarding the functionality, reliability, or safety of this code. By using this code, you assume all risks associated with its use. The author is not liable for any damages, loss of data, or other issues that may arise from the use of this code. Please use at your own discretion.

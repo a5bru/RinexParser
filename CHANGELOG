@@ -55,3 +55,6 @@ This is the inertial release
 - ADD: Constants for time formatting
 - FIX: Faster Rinex Epoch preparation
 - ADD: Entrypoint *ridah-main*
+
+## 1.1.1 - 2025-03-19
+- CHG: Readme update
