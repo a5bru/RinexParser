@@ -12,17 +12,17 @@ import os
 import math
 import argparse
 import datetime
+import time
 
 from rinex_parser.constants import RNX_FORMAT_OBS_TIME
 from rinex_parser.logger import logger
 from rinex_parser.obs_factory import RinexObsFactory, RinexObsReader
-from rinex_parser.obs_epoch import ts_epoch_to_header, ts_epoch_to_list
-
+from rinex_parser.obs_epoch import ts_epoch_to_header, ts_epoch_to_list, ts_epoch_to_time, EPOCH_MIN, EPOCH_MAX
 
 def run():
     parser = argparse.ArgumentParser(description="Analyse your Rinex files.")
     parser.add_argument("file", type=str, help="rinex file including full path")
-    parser.add_argument("version", type=int, help="rinex version (2 or 3)")
+    parser.add_argument("version", type=int, choices=[2,3], default=3, help="rinex version (2 or 3), currently only 3 supported")
     args = parser.parse_args()
     rinex_parser = RinexParser(rinex_version=args.version, rinex_file=args.file)
     rinex_parser.run()
@@ -30,7 +30,7 @@ def run():
 
 class RinexParser:
 
-    def __init__(self, rinex_file: str, rinex_version: int, *args, **kwargs):
+    def __init__(self, rinex_file: str, rinex_version: int, crop_beg = EPOCH_MIN, crop_end = EPOCH_MAX, *args, **kwargs):
         assert rinex_version in [
             2,
             3,
@@ -44,6 +44,8 @@ class RinexParser:
         self.rinex_reader: RinexObsReader = None
         self.filter_on_read: bool = kwargs.get("filter_on_read", True)
         self.sampling: int = kwargs.get("sampling", 0)
+        self.crop_beg = crop_beg
+        self.crop_end = crop_end
         self.__create_reader(self.rinex_version)
         self.rinex_reader.interval_filter = self.sampling
 
@@ -52,7 +54,7 @@ class RinexParser:
         return self.get_datadict()
     
     def get_rx3_long(self, country: str = "XXX") -> str:
-        code = self.rinex_reader.header.marker_name[:4]
+        code = self.rinex_reader.header.marker_name[:4].upper()
         ts_f = ts_epoch_to_list("> " + self.rinex_reader.rinex_epochs[0].timestamp)
         ts_l = ts_epoch_to_list("> " + self.rinex_reader.rinex_epochs[-1].timestamp)
         ts_f[-1] = int(ts_f[-1])
@@ -60,17 +62,21 @@ class RinexParser:
         dtF = datetime.datetime(*ts_f)
         dtL = datetime.datetime(*ts_l)
         dtD = (dtL - dtF).total_seconds()
-        dtD_H = dtD / 3600.0
+        dtD_M = dtD / 60.0
+        dtD_H = dtD_M / 60.0
         dtD_D = dtD_H / 24.0
         dtD_W = dtD_D / 7.0
-        unitPeriod = "H"
-        unitCount = math.ceil(dtD_H)
-        if dtD_H > 23:
-            unitPeriod = "D"
-            unitCount = math.ceil(dtD_D)
-            if dtD_D > 7:
-                unitPeriod = "W"
-                unitCount = math.ceil(dtD_W)
+        unitPeriod = "M"
+        unitCount = math.ceil(dtD_M)
+        if dtD_M > 59:
+            unitPeriod = "H"
+            unitCount = math.ceil(dtD_H)
+            if dtD_H > 23:
+                unitPeriod = "D"
+                unitCount = math.ceil(dtD_D)
+                if dtD_D > 7:
+                    unitPeriod = "W"
+                    unitCount = math.ceil(dtD_W)
         doy = int(dtF.strftime("%03j"))
         period = f"{unitCount:02d}{unitPeriod}"
         # c     c     y   j  h m
@@ -171,5 +177,26 @@ class RinexParser:
     def run(self):
         assert os.path.isfile(self.rinex_file), f"Not a file ({self.rinex_file})"
         self.do_create_datadict()
+        # remove unused header
+        if self.filter_on_read:
+            self.do_clear_datadict()
+        # crop epochs to time windows
+        cleared_epochs = []
+        for epoch in self.rinex_reader.rinex_epochs:
+            et = ts_epoch_to_time("> " + epoch.timestamp)
+            # CROP
+            if et < self.crop_beg:
+                continue
+            if et > self.crop_end:
+                continue
+            
+            # SAMPLING
+            # if self.crop_beg:
+            #     pass
+
+            # APPEND
+            cleared_epochs.append(epoch)
+
+        self.rinex_reader.rinex_epochs = cleared_epochs
         self.rinex_reader.header.first_observation = ts_epoch_to_header(self.rinex_reader.rinex_epochs[0].timestamp)
         self.rinex_reader.header.last_observation = ts_epoch_to_header(self.rinex_reader.rinex_epochs[-1].timestamp)

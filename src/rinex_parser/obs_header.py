@@ -415,7 +415,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         self.rinex_export_version = 3
         rinex_header = [
             """{format_version:9.2f}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
-{program:20s}{run_by:20s}{run_date:20s}PGM / RUN_BY / DATE
+{program:20s}{run_by:20s}{run_date:20s}PGM / RUN BY / DATE
 {comment}
 {marker_name:60s}MARKER NAME
 {marker_number:60s}MARKER NUMBER

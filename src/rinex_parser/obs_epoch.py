@@ -5,8 +5,13 @@ Created on Nov 10, 2016
 """
 
 import traceback
+import time
+import datetime
 from rinex_parser import constants as cc
 from rinex_parser.logger import logger
+
+EPOCH_MIN = datetime.datetime(1970, 1, 1).timestamp()
+EPOCH_MAX = datetime.datetime(datetime.MAXYEAR, 12, 31).timestamp()
 
 def ts_epoch_to_list(line: str) -> list:
     """Use epoch line and generate list of [y, m, d, H, M, S]."""
@@ -17,6 +22,12 @@ def ts_epoch_to_list(line: str) -> list:
     M = int(line[16:18])
     S = float(line[18:30])
     return [y, m, d, H, M, S]
+
+def ts_epoch_to_time(line: str) -> float:
+    y, m, d, H, M, S = ts_epoch_to_list(line)
+    return time.mktime(time.strptime(
+        f"{y:04d}-{m:02d}-{d:02d}T{H:02d}:{M:02d}:{S:09.6f}", "%Y-%m-%dT%H:%M:%S.%f"
+    ))
 
 
 def get_second_of_day(h: int, m: int, s: float) -> float:
