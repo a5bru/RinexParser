@@ -359,7 +359,7 @@ class Rinex2ObsReader(RinexObsReader):
                 if line == "":
                     break
 
-                # Get DateLine                
+                # Get DateLine
                 r = re.search(self.RINEX_DATELINE_REGEXP, line)
                 if r is not None:
                     timestamp = datetime.datetime(
@@ -522,6 +522,8 @@ class Rinex3ObsReader(RinexObsReader):
                 M = line[16:18]
                 S = line[18:30]
                 if self.interval_filter > 0:
+                    # updating the header entry INTERVAL
+                    self.header.sampling = self.interval_filter
                     sec_of_day = int(H) * 3600
                     sec_of_day = int(M) * 60
                     sec_of_day = int(float(S))
@@ -557,13 +559,12 @@ class Rinex3ObsReader(RinexObsReader):
                 )
                 self.rinex_epochs.append(rinex_epoch)
         if not self.header.interval and len(self.rinex_epochs) > 1:
-            ep1 = self.rinex_epochs[0]
-            ep2 = self.rinex_epochs[1]
-            el1 = ts_epoch_to_list(ep1)
-            el2 = ts_epoch_to_list(ep2)
+            el1 = ts_epoch_to_list("> " + self.rinex_epochs[0].timestamp)
+            el2 = ts_epoch_to_list("> " + self.rinex_epochs[1].timestamp)
             sd1 = get_second_of_day(el1[3], el1[4], el1[5])
             sd2 = get_second_of_day(el2[3], el2[4], el2[5])
             self.header.interval = sd2 - sd1
+            logger.info(f"Set the epoch interval to {self.header.interval}")
 
         logger.debug("Successfully created data dict")
 
