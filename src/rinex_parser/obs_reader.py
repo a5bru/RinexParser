@@ -19,7 +19,7 @@ from rinex_parser import constants as cc
 from rinex_parser.ext.convertdate.convertdate import year_doy
 from rinex_parser.logger import logger
 from rinex_parser.obs_header import Rinex2ObsHeader, Rinex3ObsHeader, RinexObsHeader
-from rinex_parser.obs_epoch import RinexEpoch
+from rinex_parser.obs_epoch import RinexEpoch, ts_epoch_to_list, get_second_of_day
 
 # from celery.utils.log import get_task_logger
 
@@ -346,17 +346,6 @@ class Rinex2ObsReader(RinexObsReader):
         """ """
         # SKIP HEADER
         with open(self.rinex_obs_file, "r") as handler:
-
-            rinex_obs = {
-                "epochs": [],
-                "fileName": self.rinex_obs_file,
-                "year4": self.year,
-                "doy": self.doy,
-                "markerName": self.header.marker_name,
-                "epochInterval": self.header.interval,
-                "epochFirst": None,
-                "epochLast": None,
-            }
             end_of_header = False
             while True:
 
@@ -370,7 +359,7 @@ class Rinex2ObsReader(RinexObsReader):
                 if line == "":
                     break
 
-                # Get DateLine
+                # Get DateLine                
                 r = re.search(self.RINEX_DATELINE_REGEXP, line)
                 if r is not None:
                     timestamp = datetime.datetime(
@@ -381,12 +370,10 @@ class Rinex2ObsReader(RinexObsReader):
                         int(r.group("minute")),
                         int(float(r.group("second"))),
                     )
-                    epoch = timestamp.strftime("%FT%TZ")
+                    # 2025 03 16 00 00  0.0000000
+                    epoch = timestamp.strftime("%Y %m %d %H %M %S.%f").ljust(27, "0")
+                    epoch_satellites = []
 
-                    rnx_epoch = {
-                        "id": epoch,
-                        "satellites": [],
-                    }
                     sats = r.group("sat1").strip()
                     # Number of Satellites
                     nos = int(r.group("nos"))
@@ -402,7 +389,6 @@ class Rinex2ObsReader(RinexObsReader):
 
                     # Get Observation Data
                     for j in range(nos):
-                        # i += 1
                         sat_num = sats[(3 * j) : (3 * (j + 1))]
                         self.add_satellite(sat_num)
 
@@ -413,29 +399,17 @@ class Rinex2ObsReader(RinexObsReader):
                                 self.prepare_line(handler.readline()),
                             )
 
-                        rnx_epoch["satellites"].append(
+                        epoch_satellites.append(
                             self.read_satellite(sat_id=sat_num, line=raw_obs)
                         )
 
-                    # Sort Satellites within epoch
-                    rnx_epoch["satellites"] = sorted(
-                        rnx_epoch["satellites"], key=lambda sat: sat["id"]
-                    )
-
-                    rinex_obs["epochs"].append(rnx_epoch)
                     rinex_epoch = RinexEpoch(
-                        timestamp=datetime.datetime.strptime(
-                            rnx_epoch["id"], cc.RNX_FORMAT_DATETIME
-                        ),
+                        timestamp=epoch,
                         observation_types=self.header.observation_types,
-                        satellites=rnx_epoch["satellites"],
+                        satellites=epoch_satellites,
                         rcv_clock_offset=self.header.rcv_clock_offset,
                     )
                     self.rinex_epochs.append(rinex_epoch)
-
-            if len(rinex_obs["epochs"]) > 0:
-                rinex_obs["epochFirst"] = rinex_obs["epochs"][0]["id"]
-                rinex_obs["epochLast"] = rinex_obs["epochs"][-1]["id"]
             logger.debug("Successfully created data dict")
 
 
@@ -558,21 +532,7 @@ class Rinex3ObsReader(RinexObsReader):
                 n = line[32:35]
                 epoch = line[2:29]
 
-                # logger.debug("Found Date")
-                # timestamp = datetime.datetime(
-                #     int(r.group("year4")),
-                #     int(r.group("month")),
-                #     int(r.group("day")),
-                #     int(r.group("hour")),
-                #     int(r.group("minute")),
-                #     int(float(r.group("second"))),
-                # )
-                # epoch = timestamp.strftime("%FT%TZ")
-
-                rnx_epoch = {
-                    "id": epoch,
-                    "satellites": [],
-                }
+                epoch_satellites = []
 
                 if e not in ["0", "1"]:
                     logger.info("Special event: {}".format(e))
@@ -585,21 +545,27 @@ class Rinex3ObsReader(RinexObsReader):
                     epoch_sat = self.read_epoch_satellite(line)
                     if epoch_sat:
                         self.add_satellite("sat_num")
-                        rnx_epoch["satellites"].append(epoch_sat["sat_data"])
+                        epoch_satellites.append(epoch_sat["sat_data"])
                     else:
                         logger.warning("No Data")
 
                 rinex_epoch = RinexEpoch(
-                    # timestamp=datetime.datetime.strptime(
-                    #     rnx_epoch["id"], cc.RNX_FORMAT_DATETIME
-                    # ),
                     timestamp=epoch,
                     observation_types=self.header.sys_obs_types,
-                    satellites=rnx_epoch["satellites"],
+                    satellites=epoch_satellites,
                     rcv_clock_offset=self.header.rcv_clock_offset,
                 )
                 self.rinex_epochs.append(rinex_epoch)
-        logger.info("Successfully created data dict")
+        if not self.header.interval and len(self.rinex_epochs) > 1:
+            ep1 = self.rinex_epochs[0]
+            ep2 = self.rinex_epochs[1]
+            el1 = ts_epoch_to_list(ep1)
+            el2 = ts_epoch_to_list(ep2)
+            sd1 = get_second_of_day(el1[3], el1[4], el1[5])
+            sd2 = get_second_of_day(el2[3], el2[4], el2[5])
+            self.header.interval = sd2 - sd1
+
+        logger.debug("Successfully created data dict")
 
     def read_epoch_satellite(self, line):
         """ """

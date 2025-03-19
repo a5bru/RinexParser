@@ -19,6 +19,10 @@ def ts_epoch_to_list(line: str) -> list:
     return [y, m, d, H, M, S]
 
 
+def get_second_of_day(h: int, m: int, s: float) -> float:
+    return h*3600.0 + m*60.0 + s
+
+
 def ts_epoch_to_header(epoch: str) -> str:
     """Convert date from epoch format to header format."""
     # > 2025 03 16 00 00  0.0000000  0 37

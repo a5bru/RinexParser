@@ -20,7 +20,13 @@ def run():
     rnx_parser.run()
 
     if args.fout:
-        out_file = args.fout
+        out_dir = os.path.dirname(args.fout)
+        out_fil = os.path.basename(args.fout)
+        if out_fil == "::RX3::":
+            out_fil = rnx_parser.get_rx3_long(country=args.country)
+        if out_dir == "":
+            out_dir = os.path.dirname(args.finp)
+        out_file = os.path.join(out_dir, out_fil)
     else:
         out_file = os.path.join(
             os.path.dirname(args.finp),

@@ -51,7 +51,7 @@ class RinexObsHeader(object):
         self.wavelength_fact = kwargs.get("wavelength_fact", None)
         self.observation_types = kwargs.get("observation_types", [])
         self.interval = kwargs.get("interval", None)
-        self.sampling = kwargs.get("sampling", None)
+        self.sampling = kwargs.get("sampling", 1.0)
         self.first_observation:str = kwargs.get("first_observation", None)
         self.last_observation:str = kwargs.get("last_observation", None)
         self.time_system = kwargs.get("time_system", None)
@@ -103,7 +103,7 @@ class RinexObsHeader(object):
         raise NotImplementedError
 
     def set_interval(self, line):
-        self.interval = int(float(line.split()[0].strip()))
+        self.interval = float(line.strip().split()[0].strip())
 
     def set_version_type(self, line):
         d = self.parse_version_type(line)
@@ -122,7 +122,7 @@ class RinexObsHeader(object):
         new_lines = []
         if self.comment == "":
             new_lines.append(
-                f"{'RinexParser-1.1.1':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
+                f"{'RinexParser-1.1.2':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
             )
             new_lines.append(new_comment)
             self.comment = "\n".join(new_lines)
@@ -496,10 +496,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
         if self.other_headers:
             rinex_header += self.other_headers
-
-        # sot = self.get_sys_obs_types()
-        # if sot:
-        #     rinex_header.append(sot)
 
         rinex_header.append("{:60s}END OF HEADER".format(""))
         return "\n".join(rinex_header)

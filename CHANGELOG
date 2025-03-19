@@ -58,3 +58,6 @@ This is the inertial release
 
 ## 1.1.1 - 2025-03-19
 - CHG: Readme update
+
+## 1.1.2 - 2025-03-19
+- FIX: Add "::RX3::" as filename
