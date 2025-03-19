@@ -10,7 +10,10 @@ import abc
 import traceback
 
 from rinex_parser import constants as c
+from rinex_parser import __version__ as VERSION
 from rinex_parser.logger import logger
+
+APP_NAME = f"RinexParser/{VERSION}"
 
 
 class RinexObsHeader(object):
@@ -122,7 +125,7 @@ class RinexObsHeader(object):
         new_lines = []
         if self.comment == "":
             new_lines.append(
-                f"{'RinexParser-1.1.2':20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
+                f"{APP_NAME:20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
             )
             new_lines.append(new_comment)
             self.comment = "\n".join(new_lines)

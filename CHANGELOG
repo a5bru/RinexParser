@@ -61,3 +61,6 @@ This is the inertial release
 
 ## 1.1.2 - 2025-03-19
 - FIX: Add "::RX3::" as filename
+
+## 1.1.3 - 2025-03-19
+- FIX: Adding epoch interval into header if missing

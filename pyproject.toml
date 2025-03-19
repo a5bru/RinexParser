@@ -2,9 +2,11 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/rinex_parser/__init__.py"
+
 [project]
 name = "RinexParser"
-version = "1.1.2"
 authors = [
   { name="Juergen Fredriksson", email="surveyor@quantentunnel.de" },
 ]
@@ -20,6 +22,8 @@ classifieres = [
 dependencies = [
   "pytz",
 ]
+
+dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/a5bru/RinexParser"
