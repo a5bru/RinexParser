@@ -13,6 +13,7 @@ parser.add_argument("--country", type=str, default="XXX", help="Country Flag to 
 parser.add_argument("--rnx-version", type=int, choices=[2,3], default=3, help="Output rinex version. Currently only 3")
 parser.add_argument("--crop-beg", type=float, default=EPOCH_MIN, help="Crop Window Beg, Unix Timestamp")
 parser.add_argument("--crop-end", type=float, default=EPOCH_MAX, help="Crop Window End, Unix Timestamp")
+parser.add_argument("--skeleton", type=str, default="", help="Path to skeleton to edit header")
 
 
 def run():

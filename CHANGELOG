@@ -71,3 +71,4 @@ This is the inertial release
 ## unreleased - 2025-03-19
 - FIX: Error in Rinex Header writing
 - ADD: Crop data by TimeWindow
+- ADD: Use Skeleton to edit header
