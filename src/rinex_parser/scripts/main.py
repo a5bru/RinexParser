@@ -53,6 +53,9 @@ def run():
         crop_end=args.crop_end,
     )
     rnx_parser.run()
+    country = args.country
+    if country == "":
+        country = "XXX"
 
     if args.skeleton:
         if os.path.exists(args.skeleton):

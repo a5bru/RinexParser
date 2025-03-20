@@ -100,6 +100,9 @@ class RinexParser:
                     unitCount = math.ceil(dtD_W)
         doy = int(dtF.strftime("%03j"))
         period = f"{unitCount:02d}{unitPeriod}"
+        if len(self.rinex_file) > 12 and self.rinex_file[10] in ["R", "S"]:
+            rinex_origin = self.rinex_file[10]
+        rinex_origin = "S"
         # c     c     y   j  h m
         # HKB200AUT_R_20250761900_01H_01S_MO.rnx
         # HKB200XXX_R_20250761900_01H_30S_MO.rnx
@@ -107,7 +110,7 @@ class RinexParser:
         if self.sampling > 0:
             smp = self.sampling
         smp = int(smp)
-        return f"{code}00{country}_R_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
+        return f"{code}00{country}_{rinex_origin}_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
 
     def get_datadict(self):
         d = {}

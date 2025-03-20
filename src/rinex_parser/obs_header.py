@@ -97,7 +97,11 @@ class RinexObsHeader(object):
 
     @staticmethod
     def parse_version_type(line):
-        format_version = float(line[:9].strip())
+        chunk = line[:9].strip()
+        if str(chunk).isdecimal():
+            format_version = float(line[:9].strip())
+        else:
+            format_version = 3.0
         file_type = line[20:40].strip()
         satellite_system = line[40:60].strip()
         return {
@@ -132,10 +136,10 @@ class RinexObsHeader(object):
             new_lines.append(line)
             self.comment = "\n".join(new_lines)
         else:
-            print(new_lines)
-            self.comment += "\n".join(new_lines)
-            print(new_lines)
-        print(self.comment)
+            new_lines.append(line)
+            for nl in new_lines:
+                self.comment += f"\n{nl}"
+            # self.comment += "\n".join(new_lines)
 
     def set_marker_name(self, line):
         self.marker_name = line[:60].strip()
@@ -230,6 +234,7 @@ class RinexObsHeader(object):
                 self.set_pgm_by_date(line)
 
             elif "COMMENT" in header_label:
+                print(line)
                 self.set_comment(line)
 
             elif "MARKER NAME" in header_label:
