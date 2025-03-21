@@ -58,7 +58,7 @@ class RinexObsHeader(object):
         self.wavelength_fact = kwargs.get("wavelength_fact", None)
         self.observation_types = kwargs.get("observation_types", [])
         self.interval = kwargs.get("interval", None)
-        self.sampling = kwargs.get("sampling", 1.0)
+        self.sampling = kwargs.get("sampling", 0.0)
         self.first_observation: str = kwargs.get("first_observation", None)
         self.last_observation: str = kwargs.get("last_observation", None)
         self.time_system = kwargs.get("time_system", None)
@@ -141,8 +141,7 @@ class RinexObsHeader(object):
         else:
             new_lines.append(line)
             for nl in new_lines:
-                self.comment += f"\n{nl}"
-            # self.comment += "\n".join(new_lines)
+                self.comment += "\n".join(nl)
 
     def set_marker_name(self, line):
         self.marker_name = line[:60].strip()

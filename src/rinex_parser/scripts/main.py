@@ -4,6 +4,9 @@ import argparse
 import queue
 import time
 import threading
+import pathlib
+import logging
+import traceback
 from typing import List, Tuple
 
 from rinex_parser import __version__
@@ -25,18 +28,22 @@ SKEL_FIELDS = [
 
 parser = argparse.ArgumentParser()
 parser.add_argument("finp", help="Path to input file(s)")
+parser.add_argument(
+    "-v", "--version", action="version", version=f"RinexParser v{__version__}"
+)
+parser.add_argument("--verbose", action="store_true", help="Show debug")
 parser.add_argument("-o", "--fout", type=str, default="", help="Path to output file")
 parser.add_argument(
     "-s", "--sampling", type=int, default=0, help="Sampling Rate for output"
+)
+parser.add_argument(
+    "-d", "--delete", action="store_true", help="Delete origin file after processing"
 )
 parser.add_argument(
     "-c", "--country", type=str, default="XXX", help="Country ISO 3166-1 alpha-3"
 )
 parser.add_argument(
     "-m", "--merge", action="store_true", help="Merge files with same marker name."
-)
-parser.add_argument(
-    "-v", "--version", action="version", version=f"RinexParser v{__version__}"
 )
 parser.add_argument(
     "-r",
@@ -80,20 +87,29 @@ def run_thread(
     while not queue.empty():
         try:
             path = queue.get()
-            logger.info(f"Process {path}")
+            logger.debug(f"Process {path}")
             with LIST_LOCK:
+                path_delete = namespace.pop("delete", False)
                 path_list.append(run_single(path, **namespace))
-                logger.info(f"Created {path_list[-1][0]}")
+                logger.debug(f"Created {path_list[-1][0]}")
+                # if path_delete:
+                #     pathlib.Path.unlink(path)
+                #     logger.info(f"Deleted {path}")
             queue.task_done()
-        except:
+        except Exception as e:
+            traceback.print_exc()
             pass
 
 
 def run():
     args = parser.parse_args()
+    print(args)
     paths = glob.glob(args.finp)
     parsed_files = []
     grouped_files = {}
+
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
 
     parse_queue = queue.Queue()
     parse_threads: List[threading.Thread] = []
@@ -101,7 +117,7 @@ def run():
     # Fill Queue with tasks
     for path in paths:
         assert os.path.exists(path)
-        logger.info(f"Append {path}")
+        logger.debug(f"Queuing {path}")
         parse_queue.put(path)
 
     # Start Threads
@@ -113,6 +129,7 @@ def run():
         "crop_end": args.crop_end,
         "country": args.country,
         "skeleton": args.skeleton,
+        "delete": args.delete,
     }
     for _ in range(args.threads):
         t = threading.Thread(
@@ -157,16 +174,25 @@ def run():
                             logger.warning(
                                 f"Sat obs types do not align [{sat_sys}, {rnx_path}, {rnx_path2}]"
                             )
+                    if args.delete:
+                        # pathlib.Path.unlink(rnx_path2)
+                        pass
 
                 # generate rinex after last item
                 if i == len(grouped_files[station]) - 1:
-                    rnx_parser.to_rinex3()
+                    rnx_parser.to_rinex3(country=args.country)
+                    if args.delete:
+                        # pathlib.Path.unlink(rnx_path)
+                        pass
 
             else:
                 rnx_path, rnx_parser = grouped_files[station][i]
                 rnx_parser: RinexParser
                 rnx_path: str
-                rnx_parser.to_rinex3()
+                rnx_parser.to_rinex3(country=args.country)
+                if args.delete:
+                    # pathlib.Path.unlink(rnx_path)
+                    pass
 
 
 def run_single(
@@ -180,7 +206,6 @@ def run_single(
     skeleton: str = "",
 ) -> Tuple[str, RinexParser]:
 
-    logger.info(f"Process {finp}")
     rnx_parser = RinexParser(
         rinex_file=finp,
         rinex_version=rnx_version,
@@ -195,7 +220,7 @@ def run_single(
 
     if skeleton:
         if os.path.exists(skeleton):
-            header_lines = ""
+            header_lines = []
             with open(skeleton, "r") as skel:
                 for line in skel.readlines():
                     if line == "":
@@ -203,9 +228,9 @@ def run_single(
                     # What rinex fields are relevant?
                     for field in list(SKEL_FIELDS):
                         if field in line[60:]:
-                            header_lines += line
+                            header_lines.append(line)
                             break
-            rnx_header = Rinex3ObsHeader.from_header(header_lines)
+            rnx_header = Rinex3ObsHeader.from_header("\n".join(header_lines))
             rnx_parser.rinex_reader.header.marker_name = rnx_header.marker_name
             rnx_parser.rinex_reader.header.marker_number = rnx_header.marker_number
             rnx_parser.rinex_reader.header.approx_position_x = (

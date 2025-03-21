@@ -104,7 +104,9 @@ class RinexParser:
         rinex_origin = "S"
         if len(self.rinex_file) > 32 and self.rinex_file[10] in ["R", "S"]:
             rinex_origin = self.rinex_file[10]
-            country = self.rinex_file[6:9].upper().ljust(3, "X")
+
+            if country.upper().ljust(3, "X")[:3] == "XXX":
+                country = self.rinex_file[6:9].upper().ljust(3, "X")
         # c     c     y   j  h m
         # HKB200AUT_R_20250761900_01H_01S_MO.rnx
         # HKB200XXX_R_20250761900_01H_30S_MO.rnx

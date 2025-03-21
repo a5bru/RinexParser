@@ -77,3 +77,5 @@ This is the inertial release
 - ADD: Get Data origin from Filename ('S' or 'R')
 - ADD: Allow wildcard input
 - ADD: Merge functionality for likely named files (-m)
+- ADD: Delete feature for ridah-obs (-d)
+- ADD: Verbose feature for ridah-obs (-d)

@@ -178,13 +178,15 @@ class RinexObsReader(object):
 
     def read_header(self, sort_obs_types=True):
         """ """
-        header = ""
+        header = []
         with open(self.rinex_obs_file, "r") as handler:
-            for i, line in enumerate(handler):
-                header += line
+            for _, line in enumerate(handler):
+                header.append(line)
                 if "END OF HEADER" in line:
                     break
-        self.header = self.RINEX_HEADER_CLASS.from_header(header_string=header)
+        self.header = self.RINEX_HEADER_CLASS.from_header(
+            header_string="\n".join(header)
+        )
         for sat_sys in self.header.sys_obs_types:
             self.found_obs_types[sat_sys] = set()
 

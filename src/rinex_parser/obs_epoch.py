@@ -237,11 +237,10 @@ class RinexEpoch(object):
         Returns: str, Rinex3 Format
         """
         nos = len(self.satellites)
-        data_lines = ""
 
         rco = self.rcv_clock_offset if self.rcv_clock_offset else " "
 
-        data_lines += (
+        data_lines = [
             "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}".format(
                 epoch_time=self.timestamp,
                 epoch_flag=self.epoch_flag,
@@ -249,8 +248,7 @@ class RinexEpoch(object):
                 empty="",
                 rcvco=rco,
             ).strip()
-            + "\n"
-        )
+        ]
 
         # sort order
 
@@ -293,12 +291,9 @@ class RinexEpoch(object):
             except Exception as e:
                 print(e)
 
-        sat_blocks = []
         for sat_sys in sat_sys_order:
-            sat_blocks += sat_sys_block[sat_sys]
-        data_lines += "\n".join(sat_blocks)
-
-        return data_lines
+            data_lines += sat_sys_block[sat_sys]
+        return "\n".join(data_lines)
 
     def from_rinex3(self, rinex):
         """ """
