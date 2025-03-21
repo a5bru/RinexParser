@@ -1,7 +1,12 @@
 import os
+import glob
 import argparse
-import datetime
+import queue
+import time
+import threading
+from typing import List, Tuple
 
+from rinex_parser import __version__
 from rinex_parser.obs_parser import RinexParser, EPOCH_MAX, EPOCH_MIN
 from rinex_parser.obs_header import Rinex3ObsHeader
 from rinex_parser.logger import logger
@@ -19,11 +24,22 @@ SKEL_FIELDS = [
 ]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("finp", help="Path to input file")
-parser.add_argument("--fout", type=str, default="", help="Path to output file")
-parser.add_argument("--smp", type=int, default=0, help="Sampling Rate for output")
-parser.add_argument("--country", type=str, default="", help="Country Flag to use")
+parser.add_argument("finp", help="Path to input file(s)")
+parser.add_argument("-o", "--fout", type=str, default="", help="Path to output file")
 parser.add_argument(
+    "-s", "--sampling", type=int, default=0, help="Sampling Rate for output"
+)
+parser.add_argument(
+    "-c", "--country", type=str, default="XXX", help="Country ISO 3166-1 alpha-3"
+)
+parser.add_argument(
+    "-m", "--merge", action="store_true", help="Merge files with same marker name."
+)
+parser.add_argument(
+    "-v", "--version", action="version", version=f"RinexParser v{__version__}"
+)
+parser.add_argument(
+    "-r",
     "--rnx-version",
     type=int,
     choices=[2, 3],
@@ -31,33 +47,138 @@ parser.add_argument(
     help="Output rinex version. Currently only 3",
 )
 parser.add_argument(
-    "--crop-beg", type=float, default=EPOCH_MIN, help="Crop Window Beg, Unix Timestamp"
+    "-b",
+    "--crop-beg",
+    type=float,
+    default=EPOCH_MIN,
+    help="Crop Window Beg, Unix Timestamp",
 )
 parser.add_argument(
-    "--crop-end", type=float, default=EPOCH_MAX, help="Crop Window End, Unix Timestamp"
+    "-e",
+    "--crop-end",
+    type=float,
+    default=EPOCH_MAX,
+    help="Crop Window End, Unix Timestamp",
 )
 parser.add_argument(
-    "--skeleton", type=str, default="", help="Path to skeleton to edit header"
+    "-t", "--skeleton", type=str, default="", help="Path to skeleton to edit header"
 )
+parser.add_argument(
+    "-n",
+    "--threads",
+    type=int,
+    default=1,
+    help="Number of threads to process rinex files",
+)
+
+LIST_LOCK = threading.Lock()
+
+
+def run_thread(
+    queue: queue.Queue, namespace: dict, path_list: List[Tuple[str, RinexParser]]
+):
+    while not queue.empty():
+        try:
+            path = queue.get()
+            logger.info(f"Process {path}")
+            with LIST_LOCK:
+                path_list.append(run_single(path, **namespace))
+            queue.task_done()
+        except:
+            pass
 
 
 def run():
     args = parser.parse_args()
-    assert os.path.exists(args.finp)
+    paths = glob.glob(args.finp)
+    parsed_files = []
+    grouped_files = {}
 
+    parse_queue = queue.Queue()
+    parse_threads: List[threading.Thread] = []
+
+    # Fill Queue with tasks
+    for path in paths:
+        assert os.path.exists(path)
+        logger.info(f"Append {path}")
+        parse_queue.put(path)
+
+    # Start Threads
+    kwargs = {
+        "fout": args.fout,
+        "rnx_version": args.rnx_version,
+        "sampling": args.sampling,
+        "crop_beg": args.crop_beg,
+        "crop_end": args.crop_end,
+        "country": args.country,
+        "skeleton": args.skeleton,
+    }
+    for _ in range(args.threads):
+        t = threading.Thread(
+            target=run_thread, args=(parse_queue, kwargs, parsed_files)
+        )
+        parse_threads.append(t)
+        t.start()
+    logger.info("Started thread(s)")
+
+    while not parse_queue.empty():
+        time.sleep(0.01)
+    logger.info("All files through Queue")
+
+    for t in parse_threads:
+        t.join()
+    logger.info("Threads joined")
+
+    for item in parsed_files:
+        station = item[0][:4]
+        if station not in grouped_files:
+            grouped_files[station] = []
+        grouped_files[station].append(item)
+
+    for station in grouped_files.keys():
+        for i, item in enumerate(grouped_files[station]):
+            if args.merge:
+                if i == 0:
+                    _, rnx_parser = grouped_files[station][0]
+                else:
+                    rnx_parser: RinexParser
+                    rnx_parser.rinex_reader.rinex_epochs += grouped_files[station][i][
+                        1
+                    ].rinex_reader.rinex_epochs
+
+            else:
+                _, rnx_parser = grouped_files[station][i]
+                rnx_parser: RinexParser
+                rnx_parser
+
+            logger.info(f"Generate {item}")
+
+
+def run_single(
+    finp: str,
+    fout: str,
+    rnx_version: int,
+    sampling: int,
+    crop_beg: float,
+    crop_end: float,
+    country: str = "XXX",
+    skeleton: str = "",
+) -> Tuple[str, RinexParser]:
+
+    logger.info(f"Process {finp}")
     rnx_parser = RinexParser(
-        rinex_file=args.finp,
-        rinex_version=args.rnx_version,
-        sampling=args.smp,
-        crop_beg=args.crop_beg,
-        crop_end=args.crop_end,
+        rinex_file=finp,
+        rinex_version=rnx_version,
+        sampling=sampling,
+        crop_beg=crop_beg,
+        crop_end=crop_end,
     )
     rnx_parser.run()
 
-    if args.skeleton:
-        if os.path.exists(args.skeleton):
+    if skeleton:
+        if os.path.exists(skeleton):
             header_lines = ""
-            with open(args.skeleton, "r") as skel:
+            with open(skeleton, "r") as skel:
                 for line in skel.readlines():
                     if line == "":
                         break
@@ -96,37 +217,30 @@ def run():
             )
             rnx_parser.rinex_reader.header.observer = rnx_header.observer
             rnx_parser.rinex_reader.header.agency = rnx_header.agency
-            if args.country == "":
+            if country == "" or country == "XXX":
                 for comment in rnx_header.comment.split("\n"):
                     if comment.startswith("CountryCode="):
                         country = comment[12:15]
                     else:
                         country = "XXX"
             else:
-                country = args.country.strip()[:3]
+                country = country.strip()[:3]
 
         else:
             logger.warning("Skeleton not found, continue")
 
-    if args.fout:
-        out_dir = os.path.dirname(args.fout)
-        out_fil = os.path.basename(args.fout)
+    if fout:
+        if len(country) != 3:
+            country = "XXX"
+        out_dir = os.path.dirname(fout)
+        out_fil = os.path.basename(fout)
         if out_fil == "::RX3::":
             out_fil = rnx_parser.get_rx3_long(country=country)
         if out_dir == "":
-            out_dir = os.path.dirname(args.finp)
+            out_dir = os.path.dirname(finp)
         out_file = os.path.join(out_dir, out_fil)
     else:
         out_file = os.path.join(
-            os.path.dirname(args.finp), rnx_parser.get_rx3_long(country=country)
+            os.path.dirname(finp), rnx_parser.get_rx3_long(country=country)
         )
-
-    # Output Rinex File
-    with open(out_file, "w") as rnx:
-        logger.info(f"Write to file: {out_file}")
-        rnx.write(rnx_parser.rinex_reader.header.to_rinex3())
-        rnx.write("\n")
-        rnx.write(rnx_parser.rinex_reader.to_rinex3())
-        rnx.write("\n")
-
-    logger.info("Done processing")
+    return (out_file, rnx_parser)

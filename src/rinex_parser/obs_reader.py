@@ -494,14 +494,14 @@ class Rinex3ObsReader(RinexObsReader):
         # SKIP HEADER
         with open(self.rinex_obs_file, "r") as handler:
 
-            logger.info("Parse Header")
+            logger.debug("Parse Header")
             keep_running = True
             while keep_running:
                 line = handler.readline()
                 if "END OF HEADER" in line:
                     keep_running = False
 
-            logger.info("Parse Epochs")
+            logger.debug("Parse Epochs")
             keep_running = True
             while keep_running:
                 # Check for END_OF_FILE

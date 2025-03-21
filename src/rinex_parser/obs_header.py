@@ -132,10 +132,7 @@ class RinexObsHeader(object):
             new_lines.append(line)
             self.comment = "\n".join(new_lines)
         else:
-            print(new_lines)
             self.comment += "\n".join(new_lines)
-            print(new_lines)
-        print(self.comment)
 
     def set_marker_name(self, line):
         self.marker_name = line[:60].strip()

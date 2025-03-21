@@ -33,4 +33,4 @@ Issues = "https://github.com/a5bru/RinexParser/issues"
 packages = ["src/rinex_parser"]
 
 [project.scripts]
-ridah-main = "rinex_parser.scripts.main:run"
+ridah-obs = "rinex_parser.scripts.main:run"
