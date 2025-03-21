@@ -148,7 +148,6 @@ class RinexQuality(object):
         )
         total_seconds = int((dt_epoch_last - dt_epoch_first).total_seconds())
 
-        # logger.debug("Filter")
         epoch_valid = []
         for epoch in datadict["epochs"]:
             if not self.is_valid_epoch(epoch):
@@ -156,18 +155,14 @@ class RinexQuality(object):
             if epoch["id"] not in epoch_valid:
                 epoch_valid.append(epoch["id"])
 
-        # logger.debug("Append")
         chkdoy["epochs_valid"] = len(epoch_valid)
-        # chkdoy["epochs_missing"] = chkdoy["epochs_max"] - chkdoy["epochs_valid"]
         epochs = []
         for epoch in epoch_valid:
             temp_utc = self.get_datetime_utc(epoch_str=epoch)
             if temp_utc not in epochs:
                 epochs.append(temp_utc)
-        # logger.debug("Sort")
         epochs = sorted(epochs)
 
-        # logger.debug("Delta")
         gaps_less = 0
         gaps_more = 0
         for i in range(len(epochs) - 1):

@@ -27,7 +27,7 @@ SKEL_FIELDS = [
 ]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("finp", help="Path to input file(s)")
+parser.add_argument("finp", nargs="+", help="Path to input file(s)")
 parser.add_argument(
     "-v", "--version", action="version", version=f"RinexParser v{__version__}"
 )
@@ -99,11 +99,14 @@ def run_thread(
 
 def run():
     args = parser.parse_args()
-    paths = glob.glob(args.finp)
+    # paths = glob.glob(args.finp)
+    paths = [f for f in args.finp]
     parsed_files = []
     grouped_files = {}
 
     if args.verbose:
+        for handler in logger.handlers:
+            handler.setLevel(logging.DEBUG)
         logger.setLevel(logging.DEBUG)
 
     parse_queue = queue.Queue()
@@ -134,7 +137,7 @@ def run():
 
     while not parse_queue.empty():
         time.sleep(0.01)
-    logger.debug("Done with processing files.")
+    logger.debug(f"Done with processing files {args.finp}")
 
     for t in parse_threads:
         t.join()

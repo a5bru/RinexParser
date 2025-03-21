@@ -166,7 +166,6 @@ class RinexParser:
         ), f"Could not find file ({self.rinex_file})"
         self.rinex_reader.set_rinex_obs_file(self.rinex_file)
         self.rinex_reader.read_header()
-        # logger.info("done with header")
         self.rinex_reader.read_data_to_dict()
 
     def do_clear_datadict(self):
@@ -206,6 +205,7 @@ class RinexParser:
         self.do_create_datadict()
         # remove unused header
         if self.filter_on_read:
+            logger.debug(f"Filter data {self.rinex_file}")
             self.do_clear_datadict()
         # crop epochs to time windows
         cleared_epochs = []

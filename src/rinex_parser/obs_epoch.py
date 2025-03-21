@@ -103,9 +103,7 @@ class RinexEpoch(object):
         Returns: bool, True, if suffices criterias, else False
         """
         for observation_type in observation_types:
-            # logger.debug("Looking for Observation Type '%s'" % observation_type)
             for satellite_system in satellite_systems:
-                # logger.debug("Looking for Satellite System '%s'" % satellite_system)
                 i = 0
                 for satellite in self.satellites:
                     if satellite["id"].startswith(satellite_system):
@@ -126,7 +124,6 @@ class RinexEpoch(object):
                 raise ValueError
             v = "{:14.3f}".format(float(val))
         except Exception as e:
-            # logger.error(e)
             v = " " * 14
         return v
 
@@ -137,7 +134,6 @@ class RinexEpoch(object):
             if d == "0":
                 d = " "
         except Exception as e:
-            # logger.error(e)
             d = " "
         return d
 
@@ -184,7 +180,6 @@ class RinexEpoch(object):
                     new_data = " " * 16
 
                 if ((j) % 5 == 0) and len(self.observation_types) > 5:
-                    # logger.debug("New Data Line")
                     new_data = "%s\n" % new_data
                 data_lines = "%s%s" % (data_lines, new_data)
 

@@ -132,16 +132,20 @@ class RinexObsHeader(object):
         if not line.strip().endswith("COMMENT"):
             line.strip().ljust(60, " ")[:60]
             line = f"{line:60}COMMENT"
+
+        if line.startswith(f"{APP_NAME:20s}{'Asbru RiDaH':20s}"):
+            return
+
         if self.comment == "":
             new_lines.append(
                 f"{APP_NAME:20s}{'Asbru RiDaH':20s}{datetime.datetime.now().strftime(c.RNX_FORMAT_DATETIME_SHORT):15s} UTC COMMENT"
             )
             new_lines.append(line)
-            self.comment = "\n".join(new_lines)
         else:
             new_lines.append(line)
-            for nl in new_lines:
-                self.comment += "\n".join(nl)
+
+        comment_append = "\n".join(new_lines)
+        self.comment += "\n" + comment_append
 
     def set_marker_name(self, line):
         self.marker_name = line[:60].strip()
@@ -222,15 +226,12 @@ class RinexObsHeader(object):
 
             header_label = line[60:]
 
-            # logger.debug(line)
-
             if "END OF HEADER" in header_label:
                 break
 
             # RINEX VERSION / TYPE
             elif "RINEX VERSION / TYPE" in header_label:
                 self.set_version_type(line)
-                # logger.debug("Rinex Version: '%f'" % self.format_version)
 
             elif "PGM / RUN BY / DATE" in header_label:
                 self.set_pgm_by_date(line)
@@ -648,7 +649,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             if sat_sys not in self.sys_obs_types:
                 self.sys_obs_types[sat_sys] = {"obs_types": []}
             self.last_sat_sys = sat_sys
-            # logger.info("Setting LastSatSys to {}".format(self.last_sat_sys))
 
         # Continuation line SYS OBS TYPES
         elif "obs_cont" in d and self.last_sat_sys:

@@ -412,7 +412,7 @@ class Rinex2ObsReader(RinexObsReader):
                         rcv_clock_offset=self.header.rcv_clock_offset,
                     )
                     self.rinex_epochs.append(rinex_epoch)
-            logger.debug("Successfully created data dict")
+            logger.debug(f"Parsed data {self.rinex_obs_file}")
 
 
 class Rinex3ObsReader(RinexObsReader):
@@ -496,14 +496,14 @@ class Rinex3ObsReader(RinexObsReader):
         # SKIP HEADER
         with open(self.rinex_obs_file, "r") as handler:
 
-            logger.debug("Parse Header")
+            logger.debug(f"Parse Header {self.rinex_obs_file}")
             keep_running = True
             while keep_running:
                 line = handler.readline()
                 if "END OF HEADER" in line:
                     keep_running = False
 
-            logger.debug("Parse Epochs")
+            logger.debug(f"Parse Epochs {self.rinex_obs_file}")
             keep_running = True
             while keep_running:
                 # Check for END_OF_FILE
@@ -568,7 +568,7 @@ class Rinex3ObsReader(RinexObsReader):
             self.header.interval = sd2 - sd1
             logger.info(f"Set the epoch interval to {self.header.interval}")
 
-        logger.debug("Successfully created data dict")
+        logger.debug(f"Parsed data {self.rinex_obs_file}")
 
     def read_epoch_satellite(self, line):
         """ """
