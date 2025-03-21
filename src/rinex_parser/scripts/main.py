@@ -89,12 +89,8 @@ def run_thread(
             path = queue.get()
             logger.debug(f"Process {path}")
             with LIST_LOCK:
-                path_delete = namespace.pop("delete", False)
                 path_list.append(run_single(path, **namespace))
                 logger.debug(f"Created {path_list[-1][0]}")
-                # if path_delete:
-                #     pathlib.Path.unlink(path)
-                #     logger.info(f"Deleted {path}")
             queue.task_done()
         except Exception as e:
             traceback.print_exc()
@@ -103,7 +99,6 @@ def run_thread(
 
 def run():
     args = parser.parse_args()
-    print(args)
     paths = glob.glob(args.finp)
     parsed_files = []
     grouped_files = {}
@@ -129,7 +124,6 @@ def run():
         "crop_end": args.crop_end,
         "country": args.country,
         "skeleton": args.skeleton,
-        "delete": args.delete,
     }
     for _ in range(args.threads):
         t = threading.Thread(
@@ -140,6 +134,7 @@ def run():
 
     while not parse_queue.empty():
         time.sleep(0.01)
+    logger.debug("Done with processing files.")
 
     for t in parse_threads:
         t.join()
@@ -174,25 +169,21 @@ def run():
                             logger.warning(
                                 f"Sat obs types do not align [{sat_sys}, {rnx_path}, {rnx_path2}]"
                             )
-                    if args.delete:
-                        # pathlib.Path.unlink(rnx_path2)
-                        pass
 
                 # generate rinex after last item
                 if i == len(grouped_files[station]) - 1:
                     rnx_parser.to_rinex3(country=args.country)
-                    if args.delete:
-                        # pathlib.Path.unlink(rnx_path)
-                        pass
 
             else:
                 rnx_path, rnx_parser = grouped_files[station][i]
                 rnx_parser: RinexParser
                 rnx_path: str
                 rnx_parser.to_rinex3(country=args.country)
-                if args.delete:
-                    # pathlib.Path.unlink(rnx_path)
-                    pass
+
+    if args.delete:
+        for path in paths:
+            logger.info(f"Deleted {path}")
+            pathlib.Path.unlink(path)
 
 
 def run_single(
