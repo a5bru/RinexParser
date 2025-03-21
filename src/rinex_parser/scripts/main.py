@@ -83,6 +83,7 @@ def run_thread(
             logger.info(f"Process {path}")
             with LIST_LOCK:
                 path_list.append(run_single(path, **namespace))
+                logger.info(f"Created {path_list[-1][0]}")
             queue.task_done()
         except:
             pass
@@ -119,15 +120,12 @@ def run():
         )
         parse_threads.append(t)
         t.start()
-    logger.info("Started thread(s)")
 
     while not parse_queue.empty():
         time.sleep(0.01)
-    logger.info("All files through Queue")
 
     for t in parse_threads:
         t.join()
-    logger.info("Threads joined")
 
     for item in parsed_files:
         station = item[0][:4]
@@ -139,19 +137,36 @@ def run():
         for i, item in enumerate(grouped_files[station]):
             if args.merge:
                 if i == 0:
-                    _, rnx_parser = grouped_files[station][0]
+                    rnx_path, rnx_parser = grouped_files[station][0]
                 else:
                     rnx_parser: RinexParser
-                    rnx_parser.rinex_reader.rinex_epochs += grouped_files[station][i][
-                        1
-                    ].rinex_reader.rinex_epochs
+                    # TODO check if marker names are the same...
+                    rnx_parser2: RinexParser = grouped_files[station][i][1]
+                    rnx_path2: str = grouped_files[station][i][0]
+                    # rnx_parser.rinex_reader.header.set_comment(f"Add file {rnx_path2}")
+                    for sat_sys in rnx_parser.rinex_reader.found_obs_types.keys():
+                        if (
+                            sat_sys in rnx_parser2.rinex_reader.found_obs_types
+                            and rnx_parser.rinex_reader.found_obs_types[sat_sys]
+                            == rnx_parser2.rinex_reader.found_obs_types[sat_sys]
+                        ):
+                            rnx_parser.rinex_reader.rinex_epochs += (
+                                rnx_parser2.rinex_reader.rinex_epochs
+                            )
+                        else:
+                            logger.warning(
+                                f"Sat obs types do not align [{sat_sys}, {rnx_path}, {rnx_path2}]"
+                            )
+
+                # generate rinex after last item
+                if i == len(grouped_files[station]) - 1:
+                    rnx_parser.to_rinex3()
 
             else:
-                _, rnx_parser = grouped_files[station][i]
+                rnx_path, rnx_parser = grouped_files[station][i]
                 rnx_parser: RinexParser
-                rnx_parser
-
-            logger.info(f"Generate {item}")
+                rnx_path: str
+                rnx_parser.to_rinex3()
 
 
 def run_single(
@@ -174,6 +189,9 @@ def run_single(
         crop_end=crop_end,
     )
     rnx_parser.run()
+
+    if len(finp) >= 34:
+        country = finp[6:9].upper().ljust(3, "X")
 
     if skeleton:
         if os.path.exists(skeleton):

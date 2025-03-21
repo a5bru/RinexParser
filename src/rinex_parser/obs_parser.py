@@ -69,6 +69,7 @@ class RinexParser:
         self.crop_end = crop_end
         self.__create_reader(self.rinex_version)
         self.rinex_reader.interval_filter = self.sampling
+        self.found_obs_types = {}
 
     @property
     def datadict(self):
@@ -100,6 +101,10 @@ class RinexParser:
                     unitCount = math.ceil(dtD_W)
         doy = int(dtF.strftime("%03j"))
         period = f"{unitCount:02d}{unitPeriod}"
+        rinex_origin = "S"
+        if len(self.rinex_file) > 32 and self.rinex_file[10] in ["R", "S"]:
+            rinex_origin = self.rinex_file[10]
+            country = self.rinex_file[6:9].upper().ljust(3, "X")
         # c     c     y   j  h m
         # HKB200AUT_R_20250761900_01H_01S_MO.rnx
         # HKB200XXX_R_20250761900_01H_30S_MO.rnx
@@ -107,7 +112,7 @@ class RinexParser:
         if self.sampling > 0:
             smp = self.sampling
         smp = int(smp)
-        return f"{code}00{country}_R_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
+        return f"{code}00{country}_{rinex_origin}_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
 
     def get_datadict(self):
         d = {}
@@ -164,10 +169,9 @@ class RinexParser:
 
     def do_clear_datadict(self):
         """Read all epochs and find empty obs types and remove them from header."""
-        found_obs_types = {}
         input_obs_types = {}
         for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
-            found_obs_types[sat_sys] = set()
+            self.found_obs_types[sat_sys] = set()
 
         # go through all epochs and satellites and their obs types
         if not self.filter_on_read:
@@ -180,16 +184,16 @@ class RinexParser:
                             and item["observations"][sat_obs] is not None
                         ):
                             obs_type = sat_obs.split("_")[0]
-                            found_obs_types[sat_sys].add(obs_type)
+                            self.found_obs_types[sat_sys].add(obs_type)
         else:
-            found_obs_types = self.rinex_reader.found_obs_types
+            self.found_obs_types = self.rinex_reader.found_obs_types
 
         # go through all obs types from header and remove those who are not listed
         for sat_sys in self.rinex_reader.header.sys_obs_types:
             input_obs_types[sat_sys] = set(
                 self.rinex_reader.header.sys_obs_types[sat_sys]["obs_types"]
             )
-            for obs_type in input_obs_types[sat_sys] - found_obs_types[sat_sys]:
+            for obs_type in input_obs_types[sat_sys] - self.found_obs_types[sat_sys]:
                 logger.info(f"Remove unused OBS TYPE {sat_sys}-{obs_type}")
                 self.rinex_reader.header.sys_obs_types[sat_sys]["obs_types"].remove(
                     obs_type
@@ -225,3 +229,23 @@ class RinexParser:
         self.rinex_reader.header.last_observation = ts_epoch_to_header(
             self.rinex_reader.rinex_epochs[-1].timestamp
         )
+
+    def to_rinex3(self, country: str = "XXX"):
+
+        self.rinex_reader.header.first_observation = ts_epoch_to_header(
+            self.rinex_reader.rinex_epochs[0].timestamp
+        )
+        self.rinex_reader.header.last_observation = ts_epoch_to_header(
+            self.rinex_reader.rinex_epochs[-1].timestamp
+        )
+        out_file = os.path.join(
+            os.path.dirname(self.rinex_file), self.get_rx3_long(country)
+        )
+
+        # Output Rinex File
+        logger.info(f"Write to file: {out_file}")
+        with open(out_file, "w") as rnx:
+            rnx.write(self.rinex_reader.header.to_rinex3())
+            rnx.write("\n")
+            rnx.write(self.rinex_reader.to_rinex3())
+            rnx.write("\n")

@@ -68,8 +68,12 @@ This is the inertial release
 ## 1.1.4 - 2025-03-19
 - CHG: pyproject.toml
 
-## unreleased - 2025-03-19
+## 1.1.5 - 2025-03-21
 - FIX: Error in Rinex Header writing
 - ADD: Crop data by TimeWindow
 - ADD: Use Skeleton to edit header
 - CHG: Using Black Formatter for python code
+- ADD: Get Country from Filename
+- ADD: Get Data origin from Filename ('S' or 'R')
+- ADD: Allow wildcard input
+- ADD: Merge functionality for likely named files (-m)
