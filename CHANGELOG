@@ -79,3 +79,5 @@ This is the inertial release
 - ADD: Merge functionality for likely named files (-m)
 - ADD: Delete feature for ridah-obs (-d)
 - ADD: Verbose feature for ridah-obs (-d)
+- REM: external dependency to "convertdate"
+- ADD: timescale.py package

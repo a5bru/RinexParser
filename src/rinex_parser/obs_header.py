@@ -459,7 +459,10 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if sot:
             rinex_header.append(sot)
 
-        smp = self.interval
+        smp = self.sampling
+
+        if not self.sampling and self.interval:
+            smp = self.interval
         if self.sampling and self.sampling > 0:
             smp = self.sampling
 

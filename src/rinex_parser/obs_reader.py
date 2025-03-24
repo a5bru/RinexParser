@@ -8,15 +8,11 @@ Created on Oct 25, 2016
 import datetime
 import os
 import re
-import multiprocessing
-import logging
-import pprint
 import traceback
-from typing import List, Optional
+from typing import List
 
 from rinex_parser import constants as cc
 
-from rinex_parser.ext.convertdate.convertdate import year_doy
 from rinex_parser.logger import logger
 from rinex_parser.obs_header import Rinex2ObsHeader, Rinex3ObsHeader, RinexObsHeader
 from rinex_parser.obs_epoch import RinexEpoch, ts_epoch_to_list, get_second_of_day

@@ -12,7 +12,8 @@ import os
 import math
 import argparse
 import datetime
-import time
+
+from pathlib import Path
 
 from rinex_parser.constants import RNX_FORMAT_OBS_TIME
 from rinex_parser.logger import logger
@@ -56,7 +57,8 @@ class RinexParser:
             2,
             3,
         ], f"Unknown version ({rinex_version} not in [2,3])"
-        assert os.path.isfile(rinex_file), f"Not a File ({rinex_file})"
+        assert Path(rinex_file).is_file(), f"Not a File ({rinex_file})"
+        # assert os.path.isfile(rinex_file), f"Not a File ({rinex_file})"
         self.rinex_version = rinex_version
         self.rinex_file = rinex_file
         if self.rinex_file != "":
@@ -120,10 +122,10 @@ class RinexParser:
         d = {}
         d["epochs"] = [e.to_dict() for e in self.rinex_reader.rinex_epochs]
         d["epochInterval"] = self.rinex_reader.header.interval
-        d["epochFirst"] = self.rinex_reader.rinex_epochs[0]["id"]
-        d["epochLast"] = self.rinex_reader.rinex_epochs[-1]["id"]
-        dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_OBS_TIME)
-        dtL = datetime.datetime.strptime(d["epochLast"], RNX_FORMAT_OBS_TIME)
+        d["epochFirst"] = self.rinex_reader.rinex_epochs[0].timestamp
+        d["epochLast"] = self.rinex_reader.rinex_epochs[-1].timestamp
+        dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_OBS_TIME.strip())
+        dtL = datetime.datetime.strptime(d["epochLast"], RNX_FORMAT_OBS_TIME.strip())
         dtD = (dtL - dtF).total_seconds()
         dtD_H = dtD / 3600.0
         dtD_D = dtD_H / 24.0
@@ -136,7 +138,7 @@ class RinexParser:
             if dtD_D > 7:
                 unitPeriod = "W"
                 unitCount = int(dtD_W)
-        d["epochPeriod"] = f"{unitCount}{unitPeriod}"
+        d["epochPeriod"] = f"{unitCount:02d}{unitPeriod}"
         d["year4"] = dtF.strftime("%Y")
         d["doy"] = dtF.strftime("%j")
         d["markerName"] = self.rinex_reader.header.marker_name

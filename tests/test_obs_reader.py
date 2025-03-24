@@ -2,10 +2,6 @@
 
 import unittest
 import os
-import pprint
-import logging
-
-from context import rinex_parser
 
 from rinex_parser.obs_quality import RinexQuality
 from rinex_parser.obs_parser import RinexParser
@@ -13,8 +9,8 @@ from rinex_parser.logger import logger
 
 # logger.setLevel(logging.INFO)
 
-RINEX3_FILE = "data/r3/GRAZ00XXX_R_20182540000_01D_30S_MO.rnx"
-RINEX3_FILE = "data/r3/NSDL00AUT_R_20233250900_01H_01S_MO.rnx"
+RINEX3_FILE = "data/r3/AGOC00SVK_R_20250750000_01H_30S_MO.rnx"
+RINEX3_FILE = "data/r3/AGOC00SVK_S_20250750000_01H_01S_MO.rnx"
 RINEX2_FILE = "data/r2/graz2540.18o"
 
 
