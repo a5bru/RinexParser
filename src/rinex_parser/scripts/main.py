@@ -1,3 +1,4 @@
+from ast import arg
 import os
 import glob
 import argparse
@@ -46,6 +47,9 @@ parser.add_argument(
     "-m", "--merge", action="store_true", help="Merge files with same marker name."
 )
 parser.add_argument(
+    "-fm", "--use-raw", action="store_true", help="Merge without checking obs types!"
+)
+parser.add_argument(
     "-r",
     "--rnx-version",
     type=int,
@@ -77,6 +81,24 @@ parser.add_argument(
     default=1,
     help="Number of threads to process rinex files",
 )
+parser.add_argument(
+    "--remove-sat-pnr",
+    type=str,
+    default="",
+    help="Remove satellites (G01,R04,E12,...)",
+)
+parser.add_argument(
+    "--remove-sat-sys",
+    type=str,
+    default="",
+    help="Remove satellite system (G,I,S) from epoch.",
+)
+parser.add_argument(
+    "--remove-sat-obs",
+    type=str,
+    default="",
+    help="Remove observation type (G1C,R1C,E8I,C6Q).",
+)
 
 LIST_LOCK = threading.Lock()
 
@@ -104,6 +126,8 @@ def run():
     parsed_files = []
     grouped_files = {}
 
+    logger.info("Start parsing rinex file(s).")
+
     if args.verbose:
         for handler in logger.handlers:
             handler.setLevel(logging.DEBUG)
@@ -127,6 +151,9 @@ def run():
         "crop_end": args.crop_end,
         "country": args.country,
         "skeleton": args.skeleton,
+        "filter_sat_sys": args.remove_sat_sys,
+        "filter_sat_pnr": args.remove_sat_pnr,
+        "filter_sat_obs": args.remove_sat_obs,
     }
     for _ in range(args.threads):
         t = threading.Thread(
@@ -137,10 +164,10 @@ def run():
 
     while not parse_queue.empty():
         time.sleep(0.01)
-    logger.debug(f"Done with processing files {args.finp}")
 
     for t in parse_threads:
         t.join()
+    logger.info(f"Finished processing input file(s)")
 
     for item in parsed_files:
         station = item[0][:4]
@@ -151,6 +178,7 @@ def run():
     for station in grouped_files.keys():
         for i, item in enumerate(grouped_files[station]):
             if args.merge:
+                logger.info("Start merging")
                 if i == 0:
                     rnx_path, rnx_parser = grouped_files[station][0]
                 else:
@@ -159,23 +187,29 @@ def run():
                     rnx_parser2: RinexParser = grouped_files[station][i][1]
                     rnx_path2: str = grouped_files[station][i][0]
                     # rnx_parser.rinex_reader.header.set_comment(f"Add file {rnx_path2}")
-                    for sat_sys in rnx_parser.rinex_reader.found_obs_types.keys():
-                        if (
-                            sat_sys in rnx_parser2.rinex_reader.found_obs_types
-                            and rnx_parser.rinex_reader.found_obs_types[sat_sys]
-                            == rnx_parser2.rinex_reader.found_obs_types[sat_sys]
-                        ):
-                            rnx_parser.rinex_reader.rinex_epochs += (
-                                rnx_parser2.rinex_reader.rinex_epochs
-                            )
-                        else:
-                            logger.warning(
-                                f"Sat obs types do not align [{sat_sys}, {rnx_path}, {rnx_path2}]"
-                            )
+                    if not args.use_raw:
+                        for sat_sys in rnx_parser.rinex_reader.found_obs_types.keys():
+                            if (
+                                sat_sys in rnx_parser2.rinex_reader.found_obs_types
+                                and rnx_parser.rinex_reader.found_obs_types[sat_sys]
+                                == rnx_parser2.rinex_reader.found_obs_types[sat_sys]
+                            ):
+                                rnx_parser.rinex_reader.rinex_epochs += (
+                                    rnx_parser2.rinex_reader.rinex_epochs
+                                )
+                            else:
+                                logger.warning(
+                                    f"Sat obs types do not align [{sat_sys}, {rnx_path}, {rnx_path2}]"
+                                )
+                    else:
+                        logger.warning("Merging epochs without checking obs types.")
+                        rnx_parser.rinex_reader.rinex_epochs += (
+                            rnx_parser2.rinex_reader.rinex_epochs
+                        )
 
                 # generate rinex after last item
                 if i == len(grouped_files[station]) - 1:
-                    rnx_parser.to_rinex3(country=args.country)
+                    rnx_parser.to_rinex3(country=args.country, use_raw=args.use_raw)
 
             else:
                 rnx_path, rnx_parser = grouped_files[station][i]
@@ -198,6 +232,9 @@ def run_single(
     crop_end: float,
     country: str = "XXX",
     skeleton: str = "",
+    filter_sat_sys: str = "",
+    filter_sat_pnr: str = "",
+    filter_sat_obs: str = "",
 ) -> Tuple[str, RinexParser]:
 
     rnx_parser = RinexParser(
@@ -206,6 +243,9 @@ def run_single(
         sampling=sampling,
         crop_beg=crop_beg,
         crop_end=crop_end,
+        filter_sat_sys=filter_sat_sys,
+        filter_sat_pnr=filter_sat_pnr,
+        filter_sat_obs=filter_sat_obs,
     )
     rnx_parser.run()
 

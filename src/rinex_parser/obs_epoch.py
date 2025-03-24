@@ -53,7 +53,9 @@ class RinexEpoch(object):
     classdocs
     """
 
-    def __init__(self, timestamp, observation_types, satellites, **kwargs):
+    def __init__(
+        self, timestamp, observation_types, satellites, raw=list[str], **kwargs
+    ):
         """
         Constructor
         Args:
@@ -70,6 +72,7 @@ class RinexEpoch(object):
         self.satellites = satellites
         self.epoch_flag = kwargs.get("epoch_flag", 0)
         self.rcv_clock_offset = kwargs.get("rcv_clock_offset", 0.0)
+        self.raw: list[str] = raw
 
     def to_dict(self):
         d = {
@@ -78,14 +81,6 @@ class RinexEpoch(object):
             "satellites": self.satellites,
         }
         return d
-
-    # def get_day_seconds(self):
-    #     """
-    #     :return: int, seconds till 00:00:00 of timestamp date
-    #     """
-    #     return (
-    #         self.timestamp.second + self.timestamp.minute * 60 + self.timestamp * 3600
-    #     )
 
     def is_valid(
         self,
@@ -169,13 +164,10 @@ class RinexEpoch(object):
             for ot in self.observation_types:
                 j += 1
                 if self.satellites[i]["observations"].has_key(ot):
-                    val = self.get_val(
-                        self.satellites[i]["observations"][ot + "_value"]
-                    )
-                    lli = self.get_d(self.satellites[i]["observations"][ot + "_lli"])
-                    ss = self.get_d(self.satellites[i]["observations"][ot + "_ss"])
-
-                    new_data = "{}{}{}".format(val, lli, ss)
+                    val = self.satellites[i]["observations"][ot][0]
+                    lli = self.satellites[i]["observations"][ot][1]
+                    ssi = self.satellites[i]["observations"][ot][2]
+                    new_data = "{}{}{}".format(val, lli, ssi)
                 else:
                     new_data = " " * 16
 
@@ -225,70 +217,68 @@ class RinexEpoch(object):
         """ """
         pass
 
-    def to_rinex3(self):
+    def to_rinex3(
+        self, observation_types: dict = {}, use_raw: bool = False
+    ) -> list[str]:
         """
         Exports Epoch with Rinex3 format
 
         Returns: str, Rinex3 Format
         """
-        nos = len(self.satellites)
 
+        if use_raw:
+            return self.raw
+
+        nos = len(self.satellites)
         rco = self.rcv_clock_offset if self.rcv_clock_offset else " "
 
         data_lines = [
-            "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}".format(
+            "> {epoch_time}  {epoch_flag}{nos:3d}{empty:6s}{rcvco}\n".format(
                 epoch_time=self.timestamp,
                 epoch_flag=self.epoch_flag,
                 nos=nos,
                 empty="",
                 rcvco=rco,
-            ).strip()
+            )
         ]
 
         # sort order
+        # sat_sys_order = "GRECJS"
 
-        sat_sys_order = "GRECJS"
-        sat_sys_block = {}
-        for sat_sys in sat_sys_order:
-            sat_sys_block[sat_sys] = []
+        if not observation_types:
+            observation_types = self.observation_types
 
-        # self.observation_types {"G": {"obs_types": [..]}, "R": {...}, ...}
-        for _, item in enumerate(self.satellites):
+        # self.observation_types {"G": set [..], "R": set [...], ...}
+        for item in self.satellites:
             # item {"id": "G01", "observations": {"C1C_[value,lli,ss]": ...}}
             try:
                 sat_sys = item["id"][0]  # G,R,E,C...
-                obs_codes = self.observation_types[sat_sys]["obs_types"]
-                new_sparse = ""
                 new_data = ""
-                for obs_code in obs_codes[::-1]:
+                for obs_code in list(observation_types[sat_sys])[::-1]:
                     try:
-                        val = self.get_val(item["observations"][f"{obs_code}_value"])
-                        lli = self.get_d(item["observations"][f"{obs_code}_lli"])
-                        ssi = self.get_d(item["observations"][f"{obs_code}_ssi"])
+                        val = item["observations"][obs_code][0]
+                        lli = item["observations"][obs_code][1]
+                        ssi = item["observations"][obs_code][2]
                         if obs_code.startswith("L") and ssi != " " and lli == " ":
                             lli = "0"
                         new_part = f"{val}{lli}{ssi}"
                     except KeyError:
                         # Satellite does not have this code
-                        new_part = " " * 16
+                        new_part = " "
                     except Exception as e:
                         traceback.print_exc()
-                        new_part = " " * 16
+                        new_part = " "
                     finally:
-                        if new_part.strip() != "":
-                            new_sparse = " " * 16
-                        else:
-                            new_part = new_sparse
+                        new_part = new_part.strip().rjust(16, " ")
                         new_data = f"{new_part}{new_data}"
 
-                new_data = f"{item['id']:3s}{new_data}"
-                sat_sys_block[sat_sys].append(new_data)
+                new_data = f"{item['id']:3s}{new_data}\n"
+                data_lines.append(new_data)
             except Exception as e:
                 print(e)
 
-        for sat_sys in sat_sys_order:
-            data_lines += sat_sys_block[sat_sys]
-        return "\n".join(data_lines)
+        return data_lines
 
     def from_rinex3(self, rinex):
         """ """
+        raise NotImplementedError
