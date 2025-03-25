@@ -41,7 +41,6 @@ class ObsReaderTestSuite(unittest.TestCase):
             logger.info("Testing Rinex Version {}".format(i[0]))
             logger.info("Rinex File: {}".format(i[1]))
             tmp(i[0], i[1])
-            self.assertTrue(False)
 
 
 if __name__ == "__main__":
