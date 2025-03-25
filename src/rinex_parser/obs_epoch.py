@@ -244,17 +244,22 @@ class RinexEpoch(object):
 
         # sort order
         # sat_sys_order = "GRECJS"
+        sat_sys_order = "CEGIJRQS"
 
         if not observation_types:
             observation_types = self.observation_types
+
+        sorted_items = {}
+        for sat_sys in sat_sys_order:
+            sorted_items[sat_sys] = []
 
         # self.observation_types {"G": set [..], "R": set [...], ...}
         for item in self.satellites:
             # item {"id": "G01", "observations": {"C1C_[value,lli,ss]": ...}}
             try:
-                sat_sys = item["id"][0]  # G,R,E,C...
                 new_data = ""
-                for obs_code in list(observation_types[sat_sys])[::-1]:
+                sat_sys = item["id"][0]  # G,R,E,C...
+                for obs_code in list(observation_types[sat_sys]):
                     try:
                         val = item["observations"][obs_code][0]
                         lli = item["observations"][obs_code][1]
@@ -264,19 +269,22 @@ class RinexEpoch(object):
                         new_part = f"{val}{lli}{ssi}"
                     except KeyError:
                         # Satellite does not have this code
-                        new_part = " "
+                        new_part = " " * 16
                     except Exception as e:
                         traceback.print_exc()
-                        new_part = " "
+                        new_part = " " * 16
                     finally:
-                        new_part = new_part.strip().rjust(16, " ")
-                        new_data = f"{new_part}{new_data}"
-
+                        new_data = f"{new_data}{new_part}"
                 new_data = f"{item['id']:3s}{new_data}\n"
-                data_lines.append(new_data)
+                sorted_items[sat_sys].append(new_data)
+                # data_lines.append(new_data)
             except Exception as e:
                 print(e)
 
+        items_keys = sorted_items.keys()
+        for sat_sys in sat_sys_order:
+            if sat_sys in items_keys:
+                data_lines += sorted_items[sat_sys]
         return data_lines
 
     def from_rinex3(self, rinex):

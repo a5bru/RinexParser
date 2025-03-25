@@ -71,7 +71,6 @@ class RinexParser:
         self.crop_end = crop_end
         self.__create_reader(self.rinex_version)
         self.rinex_reader.interval_filter = self.sampling
-        self.found_obs_types = {}
         self.filter_sat_sys = kwargs.get("filter_sat_sys", "")
         self.filter_sat_pnr = kwargs.get("filter_sat_pnr", "")
         self.filter_sat_obs = kwargs.get("filter_sat_obs", "")
@@ -178,26 +177,21 @@ class RinexParser:
 
     def do_clear_datadict(self):
         """Read all epochs and find empty obs types and remove them from header."""
-        input_obs_types = {}
-        for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
-            self.found_obs_types[sat_sys] = set()
 
-        # go through all epochs and satellites and their obs types
         if not self.filter_on_read:
-            for rinex_epoch in self.rinex_reader.rinex_epochs:
-                for _, item in enumerate(rinex_epoch.satellites):
-                    sat_sys = item["id"][0]  # GREC
-                    for obs_type in item["observations"].keys():
-                        self.found_obs_types[sat_sys].add(obs_type)
-        else:
-            self.found_obs_types = self.rinex_reader.found_obs_types
+            logger.debug("Skip filtering unused satellite obs types.")
+            return
+
+        input_obs_types = {}
 
         # go through all obs types from header and remove those who are not listed
         for sat_sys in self.rinex_reader.header.sys_obs_types:
             input_obs_types[sat_sys] = set(
                 self.rinex_reader.header.sys_obs_types[sat_sys]
             )
-            for obs_type in input_obs_types[sat_sys] - self.found_obs_types[sat_sys]:
+            for obs_type in input_obs_types[sat_sys] - set(
+                self.rinex_reader.found_obs_types[sat_sys]
+            ):
                 logger.info(f"Remove unused OBS TYPE {sat_sys}-{obs_type}")
                 self.rinex_reader.header.sys_obs_types[sat_sys].remove(obs_type)
 
@@ -217,11 +211,6 @@ class RinexParser:
                 continue
             if et > self.crop_end:
                 continue
-
-            # SAMPLING
-            # if self.crop_beg:
-            #     pass
-
             # APPEND
             cleared_epochs.append(epoch)
 
@@ -245,8 +234,15 @@ class RinexParser:
             os.path.dirname(self.rinex_file), self.get_rx3_long(country)
         )
 
+        # make sure parser and header have the same obs types:
+        output_sys_obs_types = {}
+        for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
+            if set(self.rinex_reader.header.sys_obs_types[sat_sys]) != set(
+                self.rinex_reader.found_obs_types[sat_sys]
+            ):
+                logger.warning("OBS Type missmatch!")
+
         # Output Rinex File
-        # logger.info(f"Write to file: {out_file}")
         logger.debug(f"Append Header")
         outlines = ["\n".join(self.rinex_reader.header.to_rinex3())]
         outlines += ["\n"]

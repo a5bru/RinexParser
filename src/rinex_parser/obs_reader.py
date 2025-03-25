@@ -167,11 +167,13 @@ class RinexObsReader(object):
             out += "%s\n" % rinex_epoch.to_rinex2()
         return out
 
-    def to_rinex3(self, use_raw: bool = False) -> list[str]:
+    def to_rinex3(self, use_raw: bool = False, sys_obs_types={}) -> list[str]:
         """ """
         out = []
         for rinex_epoch in self.rinex_epochs:
-            out += rinex_epoch.to_rinex3(observation_types=self.found_obs_types)
+            if not sys_obs_types:
+                sys_obs_types = self.found_obs_types
+            out += rinex_epoch.to_rinex3(observation_types=sys_obs_types)
         return out
 
     def read_header(self, sort_obs_types=True):
@@ -186,7 +188,7 @@ class RinexObsReader(object):
             header_string="\n".join(header)
         )
         for sat_sys in self.header.sys_obs_types:
-            self.found_obs_types[sat_sys] = set()
+            self.found_obs_types[sat_sys] = list()
 
     def has_satellite_system(self, sat_sys):
         """
@@ -618,7 +620,8 @@ class Rinex3ObsReader(RinexObsReader):
                 if val.strip() == "":
                     continue
 
-                self.found_obs_types[sat_sys].add(obs_type)
+                if (obs_type) not in self.found_obs_types[sat_sys]:
+                    self.found_obs_types[sat_sys].append(obs_type)
                 sat_dict["observations"][obs_type] = [val, lli, ssi]
 
         except Exception as e:

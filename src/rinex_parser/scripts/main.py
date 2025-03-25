@@ -191,8 +191,12 @@ def run():
                         for sat_sys in rnx_parser.rinex_reader.found_obs_types.keys():
                             if (
                                 sat_sys in rnx_parser2.rinex_reader.found_obs_types
-                                and rnx_parser.rinex_reader.found_obs_types[sat_sys]
-                                == rnx_parser2.rinex_reader.found_obs_types[sat_sys]
+                                and set(
+                                    rnx_parser.rinex_reader.found_obs_types[sat_sys]
+                                )
+                                == set(
+                                    rnx_parser2.rinex_reader.found_obs_types[sat_sys]
+                                )
                             ):
                                 rnx_parser.rinex_reader.rinex_epochs += (
                                     rnx_parser2.rinex_reader.rinex_epochs

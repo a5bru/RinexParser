@@ -15,7 +15,7 @@ class RinexObsFactory(object):
 
     def __create_obs_type_by_version(self, rinex_version, class_type):
         assert str(rinex_version) in RINEX_CLASSES["versions"]
-        return RINEX_CLASSES["versions"][str(rinex_version)][class_type]
+        return RINEX_CLASSES["versions"][str(int(rinex_version))][class_type]
 
     def create_obs_reader_by_version(self, rinex_version) -> RinexObsReader:
         return self.__create_obs_type_by_version(rinex_version, "reader")
@@ -26,7 +26,7 @@ class RinexObsFactory(object):
     def __create_obs_type_by_file(self, rinex_file, class_type):
         with open(rinex_file, "r") as handler:
             version_dict = RinexObsHeader.parse_version_type(handler.readline())
-            version = int(version_dict["format_version"])
+            version = version_dict["format_version"]
             return self.__create_obs_type_by_version(version, class_type)
 
     def create_obs_reader_by_file(self, rinex_file) -> RinexObsReader:

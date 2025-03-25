@@ -9,8 +9,8 @@ from rinex_parser.logger import logger
 
 # logger.setLevel(logging.INFO)
 
-RINEX3_FILE = "data/r3/AGOC00SVK_R_20250750000_01H_30S_MO.rnx"
-RINEX3_FILE = "data/r3/AGOC00SVK_S_20250750000_01H_01S_MO.rnx"
+RINEX3_FILE = "data/r3/AGOC/AGOC00SVK_R_20250750000_01H_30S_MO.rnx"
+RINEX3_FILE = "data/r3/AGOC/AGOC00SVK_S_20250750000_01H_01S_MO.rnx"
 RINEX2_FILE = "data/r2/graz2540.18o"
 
 
@@ -41,7 +41,7 @@ class ObsReaderTestSuite(unittest.TestCase):
             logger.info("Testing Rinex Version {}".format(i[0]))
             logger.info("Rinex File: {}".format(i[1]))
             tmp(i[0], i[1])
-            self.assertTrue(True)
+            self.assertTrue(False)
 
 
 if __name__ == "__main__":
