@@ -167,7 +167,7 @@ def run():
 
     for t in parse_threads:
         t.join()
-    logger.info(f"Finished processing input file(s)")
+    logger.debug(f"Finished processing input file(s)")
 
     for item in parsed_files:
         station = item[0][:4]
@@ -178,7 +178,7 @@ def run():
     for station in grouped_files.keys():
         for i, item in enumerate(grouped_files[station]):
             if args.merge:
-                logger.info("Start merging")
+                logger.debug("Start merging")
                 if i == 0:
                     rnx_path, rnx_parser = grouped_files[station][0]
                 else:

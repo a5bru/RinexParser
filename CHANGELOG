@@ -81,3 +81,4 @@ This is the inertial release
 - ADD: Verbose feature for ridah-obs (-d)
 - REM: external dependency to "convertdate"
 - ADD: timescale.py package
+- FIX: faster file writing

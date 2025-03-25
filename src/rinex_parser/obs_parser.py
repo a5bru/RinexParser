@@ -247,13 +247,13 @@ class RinexParser:
 
         # Output Rinex File
         # logger.info(f"Write to file: {out_file}")
-        logger.info(f"Append Header")
+        logger.debug(f"Append Header")
         outlines = ["\n".join(self.rinex_reader.header.to_rinex3())]
         outlines += ["\n"]
-        logger.info(f"Append Epochs")
+        logger.debug(f"Append Epochs")
         outlines += self.rinex_reader.to_rinex3(use_raw=use_raw)
         outlines += ["\n"]
-        logger.info(f"Start writing to file {out_file}.")
+        logger.debug(f"Start writing to file {out_file}.")
         with open(out_file, "w") as rnx:
             rnx.writelines(outlines)
         logger.info(f"Done writing to file {out_file}.")
