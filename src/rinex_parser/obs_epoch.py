@@ -218,7 +218,10 @@ class RinexEpoch(object):
         pass
 
     def to_rinex3(
-        self, observation_types: dict = {}, use_raw: bool = False
+        self,
+        observation_types: dict = {},
+        use_raw: bool = False,
+        sat_sys_order: str = "CEGIJQRS",
     ) -> list[str]:
         """
         Exports Epoch with Rinex3 format
@@ -241,10 +244,6 @@ class RinexEpoch(object):
                 rcvco=rco,
             )
         ]
-
-        # sort order
-        # sat_sys_order = "GRECJS"
-        sat_sys_order = "CEGIJRQS"
 
         if not observation_types:
             observation_types = self.observation_types

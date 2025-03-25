@@ -235,7 +235,6 @@ class RinexParser:
         )
 
         # make sure parser and header have the same obs types:
-        output_sys_obs_types = {}
         for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
             if set(self.rinex_reader.header.sys_obs_types[sat_sys]) != set(
                 self.rinex_reader.found_obs_types[sat_sys]
@@ -247,7 +246,11 @@ class RinexParser:
         outlines = ["\n".join(self.rinex_reader.header.to_rinex3())]
         outlines += ["\n"]
         logger.debug(f"Append Epochs")
-        outlines += self.rinex_reader.to_rinex3(use_raw=use_raw)
+        outlines += self.rinex_reader.to_rinex3(
+            use_raw=use_raw,
+            sys_obs_types=self.rinex_reader.header.sys_obs_types,
+            sys_order=self.rinex_reader.header.sys_obs_types.keys(),
+        )
         outlines += ["\n"]
         logger.debug(f"Start writing to file {out_file}.")
         with open(out_file, "w") as rnx:

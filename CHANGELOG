@@ -82,3 +82,4 @@ This is the inertial release
 - REM: external dependency to "convertdate"
 - ADD: timescale.py package
 - FIX: faster file writing
+- ADD: order of satellites by the header order of OBS TYPES

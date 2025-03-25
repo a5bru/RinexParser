@@ -167,13 +167,17 @@ class RinexObsReader(object):
             out += "%s\n" % rinex_epoch.to_rinex2()
         return out
 
-    def to_rinex3(self, use_raw: bool = False, sys_obs_types={}) -> list[str]:
+    def to_rinex3(
+        self, use_raw: bool = False, sys_obs_types={}, sys_order: str = "CEGIJQRS"
+    ) -> list[str]:
         """ """
         out = []
         for rinex_epoch in self.rinex_epochs:
             if not sys_obs_types:
                 sys_obs_types = self.found_obs_types
-            out += rinex_epoch.to_rinex3(observation_types=sys_obs_types)
+            out += rinex_epoch.to_rinex3(
+                observation_types=sys_obs_types, sat_sys_order=sys_order
+            )
         return out
 
     def read_header(self, sort_obs_types=True):
