@@ -17,9 +17,6 @@ from rinex_parser.logger import logger
 from rinex_parser.obs_header import Rinex2ObsHeader, Rinex3ObsHeader, RinexObsHeader
 from rinex_parser.obs_epoch import RinexEpoch, ts_epoch_to_list, get_second_of_day
 
-# from celery.utils.log import get_task_logger
-
-celery_logger = logger
 
 __updated__ = "2016-11-16"
 
@@ -339,7 +336,7 @@ class Rinex2ObsReader(RinexObsReader):
                 # Check for END_OF_FILE
                 line = handler.readline()
                 if "END OF HEADER" in line:
-                    celery_logger.debug("End of Header Reached")
+                    logger.debug("End of Header Reached")
                     end_of_header = True
                 if not end_of_header:
                     continue
