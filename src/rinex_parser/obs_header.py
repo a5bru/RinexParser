@@ -13,7 +13,7 @@ from rinex_parser import constants as c
 from rinex_parser import __version__ as VERSION
 from rinex_parser.logger import logger
 
-APP_NAME = f"RinexParser/{VERSION}"
+APP_NAME = f"RiDaH v{VERSION}"
 
 
 class RinexObsHeader(object):
@@ -33,7 +33,6 @@ class RinexObsHeader(object):
         self.format_version = float(kwargs.get("format_version"))
         self.file_type = kwargs.get("file_type", "OBSERVATION DATA")
         self.satellite_system = kwargs.get("satellite_system", "M (MIXED)")
-        self.satellites = {}
         self.run_by = kwargs.get("run_by", "ASBRU")
         self.run_date = kwargs.get(
             "run_date", datetime.datetime.now().strftime("%FT%H:%MZ")
@@ -65,6 +64,7 @@ class RinexObsHeader(object):
         self.rcv_clock_offset = kwargs.get("rcv_clock_offset", None)
         self.leap_seconds = kwargs.get("leap_seconds", None)
         self.total_satellites = 0
+        self.sat_stats = {}
         self.empty = ""
         self.sys_obs_types = {}  # {"G": set [..], "R": set [...], ...}
         self.other_headers = []
@@ -488,10 +488,12 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
                 "{:6d}{:54s}RCV CLOCK OFFS APPL".format(self.rcv_clock_offset, "")
             )
 
-        if self.total_satellites > 0:
-            rinex_header.append(
-                "{:6d}{:54s}# OF SATELLITES".format(self.total_satellites, "")
-            )
+        if self.total_satellites > 0 or self.sat_stats:
+            if self.sat_stats:
+                nos = len(self.sat_stats.keys())
+            else:
+                nos = self.total_satellites
+            rinex_header.append("{:6d}{:54s}# OF SATELLITES".format(nos, ""))
 
         apc = self.get_antenna_phasecenter()
         if apc:
@@ -513,11 +515,22 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if com:
             rinex_header.append(com)
 
+        if self.sat_stats:
+            stats = self.get_sat_stats()
+            rinex_header.append(stats)
+
         if self.other_headers:
             rinex_header += self.other_headers
 
         rinex_header.append("{:60s}END OF HEADER".format(""))
         return rinex_header
+
+    def get_sat_stats(self):
+        out = []
+        for sat_id in sorted(self.sat_stats.keys()):
+            p1 = f"SAT OBS TYPE COUNT: {sat_id}: {len(self.sat_stats[sat_id])}"
+            out.append(f"{p1:60s}COMMENT")
+        return "\n".join(out)
 
     def get_antenna_delta_xyz(self):
         """ """

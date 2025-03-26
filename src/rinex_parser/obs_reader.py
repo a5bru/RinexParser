@@ -70,6 +70,7 @@ class RinexObsReader(object):
         self.filter_sat_sys: list = kwargs.get("filter_sat_sys", "").split(",")
         self.filter_sat_pnr: list = kwargs.get("filter_sat_pnr", "").split(",")
         self.filter_sat_obs: list = kwargs.get("filter_sat_obs", "").split(",")
+        self.sat_stats = {}  # {"G01": {"C1C": 4}, ...}
 
     @staticmethod
     def get_start_time(file_sequence):
@@ -551,6 +552,9 @@ class Rinex3ObsReader(RinexObsReader):
             self.header.interval = sd2 - sd1
             logger.info(f"Set the epoch interval to {self.header.interval}")
 
+        if self.sat_stats:
+            self.header.sat_stats = self.sat_stats
+
         logger.debug(f"Parsed data {self.rinex_obs_file}")
 
     def read_epoch_satellite(self, line):
@@ -594,6 +598,9 @@ class Rinex3ObsReader(RinexObsReader):
             if sat_id in self.filter_sat_pnr:
                 return sat_dict
 
+            # if sat_id not in self.sat_stats:
+            #    self.sat_stats[sat_id] = {}
+
             for obs_type in self.header.sys_obs_types[sat_sys]:
 
                 # Filter System Obs Type
@@ -604,7 +611,9 @@ class Rinex3ObsReader(RinexObsReader):
                 if not chunk:
                     break
 
-                val = lli = ssi = None
+                val = " " * 14
+                lli = " "
+                ssi = " "
                 try:
                     val = chunk[:14]
                     chunk = chunk[14:]
@@ -618,9 +627,14 @@ class Rinex3ObsReader(RinexObsReader):
                 if val.strip() == "":
                     continue
 
-                if (obs_type) not in self.found_obs_types[sat_sys]:
+                if obs_type not in self.found_obs_types[sat_sys]:
                     self.found_obs_types[sat_sys].append(obs_type)
+
+                # if obs_type not in self.sat_stats[sat_id]:
+                #    self.sat_stats[sat_id][obs_type] = 0
+
                 sat_dict["observations"][obs_type] = [val, lli, ssi]
+                # self.sat_stats[sat_id][obs_type] += 1
 
         except Exception as e:
             traceback.print_exc()
