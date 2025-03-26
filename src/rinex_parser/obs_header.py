@@ -66,7 +66,7 @@ class RinexObsHeader(object):
         self.leap_seconds = kwargs.get("leap_seconds", None)
         self.total_satellites = 0
         self.empty = ""
-        self.sys_obs_types = {}  # {"G": {"obs_types": [..]}, "R": {...}, ...}
+        self.sys_obs_types = {}  # {"G": set [..], "R": set [...], ...}
         self.other_headers = []
 
     @property
@@ -97,11 +97,7 @@ class RinexObsHeader(object):
 
     @staticmethod
     def parse_version_type(line):
-        chunk = line[:9].strip()
-        if str(chunk).isdecimal():
-            format_version = float(line[:9].strip())
-        else:
-            format_version = 3.0
+        format_version = str(line[:9].strip())
         file_type = line[20:40].strip()
         satellite_system = line[40:60].strip()
         return {
@@ -110,7 +106,7 @@ class RinexObsHeader(object):
             "satellite_system": satellite_system,
         }
 
-    def to_rinex3(self, *args):
+    def to_rinex3(self, *args) -> list[str]:
         raise NotImplementedError
 
     def set_interval(self, line):
@@ -297,7 +293,7 @@ class Rinex2ObsHeader(RinexObsHeader):
         super(Rinex2ObsHeader, self).__init__(**kwargs)
         self.rinex_export_version = 2
 
-    def to_rinex3(self):
+    def to_rinex3(self) -> list[str]:
         """ """
         self.rinex_export_version = 3
         r3 = Rinex3ObsHeader(**self.__dict__)
@@ -308,7 +304,7 @@ class Rinex2ObsHeader(RinexObsHeader):
         Return RINEX2 Header
         """
         self.rinex_export_version = 2
-        r2h = """{format_version:9.2f}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
+        r2h = """{format_version:9s}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
 {program:20s}{run_by:20s}{run_date:20s}PGM / RUN_BY / DATE
 {comment}
 {marker_name:60s}MARKER NAME
@@ -425,10 +421,10 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
         self.prn_obs = None
 
-    def to_rinex3(self):
+    def to_rinex3(self, sys_obs_types: dict = {}) -> list[str]:
         self.rinex_export_version = 3
         rinex_header = [
-            """{format_version:9.2f}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
+            """{format_version:9s}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
 {program:20s}{run_by:20s}{run_date:20s}PGM / RUN BY / DATE
 {comment}
 {marker_name:60s}MARKER NAME
@@ -455,11 +451,17 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
                 )
             )
 
+        if sys_obs_types:
+            logger.debug("Overwrite OBS TYPES in header")
+            self.sys_obs_types = sys_obs_types
         sot = self.get_sys_obs_types().strip()
         if sot:
             rinex_header.append(sot)
 
-        smp = self.interval
+        smp = self.sampling
+
+        if not self.sampling and self.interval:
+            smp = self.interval
         if self.sampling and self.sampling > 0:
             smp = self.sampling
 
@@ -515,7 +517,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             rinex_header += self.other_headers
 
         rinex_header.append("{:60s}END OF HEADER".format(""))
-        return "\n".join(rinex_header)
+        return rinex_header
 
     def get_antenna_delta_xyz(self):
         """ """
@@ -590,8 +592,8 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         sot = []
         for sat_sys in c.RINEX3_SATELLITE_SYSTEMS:
             if sat_sys in self.sys_obs_types:
-                temp = f"{sat_sys}  {len(self.sys_obs_types[sat_sys]['obs_types']):3d}"
-                for i, v in enumerate(self.sys_obs_types[sat_sys]["obs_types"]):
+                temp = f"{sat_sys}  {len(self.sys_obs_types[sat_sys]):3d}"
+                for i, v in enumerate(self.sys_obs_types[sat_sys]):
                     temp += f" {v:3s}"
                     if ((i + 1) % 13 == 0) and (i > 0):
                         sot.append(f"{temp:60s}SYS / # / OBS TYPES")
@@ -647,7 +649,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             sat_sys = d["sat_sys"]
             # No SYS OBS TYPE exists so far
             if sat_sys not in self.sys_obs_types:
-                self.sys_obs_types[sat_sys] = {"obs_types": []}
+                self.sys_obs_types[sat_sys] = list()
             self.last_sat_sys = sat_sys
 
         # Continuation line SYS OBS TYPES
@@ -659,10 +661,9 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             obs_descriptors = re.finditer(c.RINEX3_FORMAT_OBS_DESCRIPTOR, line)
             for obs_descriptor in obs_descriptors:
                 obs_descriptor_clean = obs_descriptor.group(0).strip()
-                if obs_descriptor_clean not in self.sys_obs_types[sat_sys]["obs_types"]:
-                    self.sys_obs_types[sat_sys]["obs_types"].append(
-                        obs_descriptor_clean
-                    )
+                if obs_descriptor_clean not in self.sys_obs_types[sat_sys]:
+                    if obs_descriptor_clean not in self.sys_obs_types[sat_sys]:
+                        self.sys_obs_types[sat_sys].append(obs_descriptor_clean)
 
         return sat_sys
 

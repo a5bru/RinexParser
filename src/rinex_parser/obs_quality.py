@@ -5,7 +5,6 @@ import datetime
 
 from rinex_parser import constants as cc
 from rinex_parser.logger import logger
-from rinex_parser.ext import convertdate
 
 
 class RinexQuality(object):
@@ -77,7 +76,7 @@ class RinexQuality(object):
     @staticmethod
     def get_datetime_utc(epoch_str):
         """ """
-        return datetime.datetime.strptime(epoch_str, cc.RNX_FORMAT_DATETIME)
+        return datetime.datetime.strptime(epoch_str, cc.RNX_FORMAT_OBS_TIME.strip())
 
     @staticmethod
     def get_session_code(second_of_day):
@@ -107,8 +106,8 @@ class RinexQuality(object):
                     cc.RNX_FORMAT_DATETIME
                 )
 
-        dt0 = convertdate.convertdate.year_doy.to_datetime(
-            datadict["year4"], datadict["doy"]
+        dt0 = datetime.datetime.strptime(
+            f"{datadict['year4']}-{datadict['doy']}", "%Y-%j"
         )
 
         if "epochPeriod" not in datadict:
@@ -141,10 +140,10 @@ class RinexQuality(object):
 
         # logger.debug("Prepare")
         dt_epoch_first = datetime.datetime.strptime(
-            chkdoy["epoch_first"], cc.RNX_FORMAT_DATETIME
+            chkdoy["epoch_first"], cc.RNX_FORMAT_OBS_TIME.strip()
         )
         dt_epoch_last = datetime.datetime.strptime(
-            chkdoy["epoch_last"], cc.RNX_FORMAT_DATETIME
+            chkdoy["epoch_last"], cc.RNX_FORMAT_OBS_TIME.strip()
         )
         total_seconds = int((dt_epoch_last - dt_epoch_first).total_seconds())
 

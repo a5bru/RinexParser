@@ -19,9 +19,7 @@ classifieres = [
   "Development Status :: 4 - Beta",
   "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
 ]
-dependencies = [
-  "pytz",
-]
+dependencies = []
 
 dynamic = ["version"]
 

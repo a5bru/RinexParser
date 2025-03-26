@@ -12,7 +12,8 @@ import os
 import math
 import argparse
 import datetime
-import time
+
+from pathlib import Path
 
 from rinex_parser.constants import RNX_FORMAT_OBS_TIME
 from rinex_parser.logger import logger
@@ -56,7 +57,8 @@ class RinexParser:
             2,
             3,
         ], f"Unknown version ({rinex_version} not in [2,3])"
-        assert os.path.isfile(rinex_file), f"Not a File ({rinex_file})"
+        assert Path(rinex_file).is_file(), f"Not a File ({rinex_file})"
+        # assert os.path.isfile(rinex_file), f"Not a File ({rinex_file})"
         self.rinex_version = rinex_version
         self.rinex_file = rinex_file
         if self.rinex_file != "":
@@ -69,7 +71,12 @@ class RinexParser:
         self.crop_end = crop_end
         self.__create_reader(self.rinex_version)
         self.rinex_reader.interval_filter = self.sampling
-        self.found_obs_types = {}
+        self.filter_sat_sys = kwargs.get("filter_sat_sys", "")
+        self.filter_sat_pnr = kwargs.get("filter_sat_pnr", "")
+        self.filter_sat_obs = kwargs.get("filter_sat_obs", "")
+        self.rinex_reader.filter_sat_sys = self.filter_sat_sys
+        self.rinex_reader.filter_sat_pnr = self.filter_sat_pnr
+        self.rinex_reader.filter_sat_obs = self.filter_sat_obs
 
     @property
     def datadict(self):
@@ -120,10 +127,10 @@ class RinexParser:
         d = {}
         d["epochs"] = [e.to_dict() for e in self.rinex_reader.rinex_epochs]
         d["epochInterval"] = self.rinex_reader.header.interval
-        d["epochFirst"] = self.rinex_reader.rinex_epochs[0]["id"]
-        d["epochLast"] = self.rinex_reader.rinex_epochs[-1]["id"]
-        dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_OBS_TIME)
-        dtL = datetime.datetime.strptime(d["epochLast"], RNX_FORMAT_OBS_TIME)
+        d["epochFirst"] = self.rinex_reader.rinex_epochs[0].timestamp
+        d["epochLast"] = self.rinex_reader.rinex_epochs[-1].timestamp
+        dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_OBS_TIME.strip())
+        dtL = datetime.datetime.strptime(d["epochLast"], RNX_FORMAT_OBS_TIME.strip())
         dtD = (dtL - dtF).total_seconds()
         dtD_H = dtD / 3600.0
         dtD_D = dtD_H / 24.0
@@ -136,7 +143,7 @@ class RinexParser:
             if dtD_D > 7:
                 unitPeriod = "W"
                 unitCount = int(dtD_W)
-        d["epochPeriod"] = f"{unitCount}{unitPeriod}"
+        d["epochPeriod"] = f"{unitCount:02d}{unitPeriod}"
         d["year4"] = dtF.strftime("%Y")
         d["doy"] = dtF.strftime("%j")
         d["markerName"] = self.rinex_reader.header.marker_name
@@ -170,35 +177,23 @@ class RinexParser:
 
     def do_clear_datadict(self):
         """Read all epochs and find empty obs types and remove them from header."""
-        input_obs_types = {}
-        for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
-            self.found_obs_types[sat_sys] = set()
 
-        # go through all epochs and satellites and their obs types
         if not self.filter_on_read:
-            for rinex_epoch in self.rinex_reader.rinex_epochs:
-                for _, item in enumerate(rinex_epoch.satellites):
-                    sat_sys = item["id"][0]  # GREC
-                    for sat_obs in item["observations"].keys():
-                        if (
-                            sat_obs.endswith("_value")
-                            and item["observations"][sat_obs] is not None
-                        ):
-                            obs_type = sat_obs.split("_")[0]
-                            self.found_obs_types[sat_sys].add(obs_type)
-        else:
-            self.found_obs_types = self.rinex_reader.found_obs_types
+            logger.debug("Skip filtering unused satellite obs types.")
+            return
+
+        input_obs_types = {}
 
         # go through all obs types from header and remove those who are not listed
         for sat_sys in self.rinex_reader.header.sys_obs_types:
             input_obs_types[sat_sys] = set(
-                self.rinex_reader.header.sys_obs_types[sat_sys]["obs_types"]
+                self.rinex_reader.header.sys_obs_types[sat_sys]
             )
-            for obs_type in input_obs_types[sat_sys] - self.found_obs_types[sat_sys]:
+            for obs_type in input_obs_types[sat_sys] - set(
+                self.rinex_reader.found_obs_types[sat_sys]
+            ):
                 logger.info(f"Remove unused OBS TYPE {sat_sys}-{obs_type}")
-                self.rinex_reader.header.sys_obs_types[sat_sys]["obs_types"].remove(
-                    obs_type
-                )
+                self.rinex_reader.header.sys_obs_types[sat_sys].remove(obs_type)
 
     def run(self):
         assert os.path.isfile(self.rinex_file), f"Not a file ({self.rinex_file})"
@@ -216,11 +211,6 @@ class RinexParser:
                 continue
             if et > self.crop_end:
                 continue
-
-            # SAMPLING
-            # if self.crop_beg:
-            #     pass
-
             # APPEND
             cleared_epochs.append(epoch)
 
@@ -232,7 +222,7 @@ class RinexParser:
             self.rinex_reader.rinex_epochs[-1].timestamp
         )
 
-    def to_rinex3(self, country: str = "XXX"):
+    def to_rinex3(self, country: str = "XXX", use_raw: bool = False):
 
         self.rinex_reader.header.first_observation = ts_epoch_to_header(
             self.rinex_reader.rinex_epochs[0].timestamp
@@ -244,10 +234,25 @@ class RinexParser:
             os.path.dirname(self.rinex_file), self.get_rx3_long(country)
         )
 
+        # make sure parser and header have the same obs types:
+        for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
+            if set(self.rinex_reader.header.sys_obs_types[sat_sys]) != set(
+                self.rinex_reader.found_obs_types[sat_sys]
+            ):
+                logger.warning("OBS Type missmatch!")
+
         # Output Rinex File
-        logger.info(f"Write to file: {out_file}")
+        logger.debug(f"Append Header")
+        outlines = ["\n".join(self.rinex_reader.header.to_rinex3())]
+        outlines += ["\n"]
+        logger.debug(f"Append Epochs")
+        outlines += self.rinex_reader.to_rinex3(
+            use_raw=use_raw,
+            sys_obs_types=self.rinex_reader.header.sys_obs_types,
+            sys_order=self.rinex_reader.header.sys_obs_types.keys(),
+        )
+        outlines += ["\n"]
+        logger.debug(f"Start writing to file {out_file}.")
         with open(out_file, "w") as rnx:
-            rnx.write(self.rinex_reader.header.to_rinex3())
-            rnx.write("\n")
-            rnx.write(self.rinex_reader.to_rinex3())
-            rnx.write("\n")
+            rnx.writelines(outlines)
+        logger.info(f"Done writing to file {out_file}.")
