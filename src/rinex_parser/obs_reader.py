@@ -23,9 +23,6 @@ from rinex_parser.obs_epoch import RinexEpoch, ts_epoch_to_list, get_second_of_d
 
 # from celery.utils.log import get_task_logger
 
-
-# celery_logger = get_task_logger(__name__)
-# celery_logger.setLevel(logging.DEBUG)
 celery_logger = logger
 
 __updated__ = "2016-11-16"
