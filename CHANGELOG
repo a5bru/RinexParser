@@ -83,3 +83,7 @@ This is the inertial release
 - ADD: timescale.py package
 - FIX: faster file writing
 - ADD: order of satellites by the header order of OBS TYPES
+
+## 1.1.6 - 2025-03-29
+- FIX: RinexQuality uses class RinexEpoch instead of dict
+- ADD: Method ts_epoch_to_datetime

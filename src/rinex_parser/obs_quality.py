@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
 import os
+import time
 import datetime
 
 from rinex_parser import constants as cc
 from rinex_parser.logger import logger
+from rinex_parser.obs_parser import RinexParser
+from rinex_parser.obs_epoch import RinexEpoch, ts_epoch_to_time, ts_epoch_to_datetime
 
 
 class RinexQuality(object):
@@ -27,27 +30,26 @@ class RinexQuality(object):
         for satellite in epoch_satellites:
             if (
                 "id" in satellite
-                and satellite["id"].startswith(satellite_system)
+                and satellite["id"][0] == satellite_system
                 and "observations" in satellite
             ):
                 for observation in satellite["observations"]:
-                    if observation.endswith("_value"):
-                        if (
-                            observation == observation_descriptor
-                            and satellite["observations"][observation] is not None
-                        ):
-                            yield satellite
-                        elif (
-                            self.rinex_format == 3
-                            and observation.startswith(observation_descriptor)
-                            and satellite["observations"][observation] is not None
-                        ):
-                            yield satellite
-                            continue
+                    if (
+                        observation == observation_descriptor
+                        and satellite["observations"][observation][0] is not None
+                    ):
+                        yield satellite
+                    elif (
+                        self.rinex_format == 3
+                        and observation.startswith(observation_descriptor)
+                        and satellite["observations"][observation][0] is not None
+                    ):
+                        yield satellite
+                        continue
 
     def is_valid_epoch(
         self,
-        epoch,
+        epoch: RinexEpoch,
         satellite_systems=["G"],
         observation_descriptors=["L1", "L2"],
         satellites=5,
@@ -64,7 +66,7 @@ class RinexQuality(object):
             for satellite_system in satellite_systems:
                 i = 0
                 i_test = self.filter_by_observation_descriptor(
-                    epoch_satellites=epoch["satellites"],
+                    epoch_satellites=epoch.satellites,
                     observation_descriptor=observation_descriptor,
                     satellite_system=satellite_system,
                 )
@@ -89,26 +91,24 @@ class RinexQuality(object):
         i = int(second_of_day / 3600)
         return chr(i + 65)
 
-    def do_prepare_datadict(self, datadict, gapsize):
+    def do_prepare_datadict(self, rinex_parser: RinexParser, gapsize: int = 5):
         """ """
-        if "epochs" not in datadict or (
-            "epochs" in datadict and len(datadict["epochs"]) == 0
-        ):
-            logger.warn("No Epoch parsed")
+        if len(rinex_parser.rinex_reader.rinex_epochs) == 0:
+            logger.warning("No Epoch parsed")
             return ""
+
+        datadict = rinex_parser.get_datadict()
 
         for zeitpunkt in ["epochFirst", "epochLast"]:
             if (
-                zeitpunkt not in datadict
-                and not isinstance(datadict[zeitpunkt], datetime.datetime)
+                zeitpunkt not in datadict and not isinstance(datadict[zeitpunkt], float)
             ) or (zeitpunkt in datadict and datadict[zeitpunkt] is None):
-                datadict[zeitpunkt] = datetime.datetime.now().strftime(
-                    cc.RNX_FORMAT_DATETIME
-                )
+                datadict[zeitpunkt] = time.time()
 
-        dt0 = datetime.datetime.strptime(
-            f"{datadict['year4']}-{datadict['doy']}", "%Y-%j"
+        dt0 = datetime.datetime.fromtimestamp(
+            ts_epoch_to_time("> " + datadict["epochFirst"])
         )
+        dtD = dt0.strftime("%j")
 
         if "epochPeriod" not in datadict:
             datadict["epochPeriod"] = "01D"  # Daily Files as default
@@ -123,10 +123,10 @@ class RinexQuality(object):
         )
 
         chkdoy = {
-            "filename": os.path.basename(datadict["fileName"]),
-            "station": datadict["markerName"],
-            "year": datadict["year4"],
-            "doy": datadict["doy"],
+            "filename": os.path.basename(rinex_parser.rinex_file),
+            "station": rinex_parser.rinex_reader.header.marker_name,
+            "year": dt0.year,
+            "doy": dtD,
             "dom": dt0.day,
             "month": dt0.month,
             "gaps": [],
@@ -138,6 +138,8 @@ class RinexQuality(object):
             "epoch_last": datadict["epochLast"],
         }
 
+        print(chkdoy)
+
         # logger.debug("Prepare")
         dt_epoch_first = datetime.datetime.strptime(
             chkdoy["epoch_first"], cc.RNX_FORMAT_OBS_TIME.strip()
@@ -148,29 +150,28 @@ class RinexQuality(object):
         total_seconds = int((dt_epoch_last - dt_epoch_first).total_seconds())
 
         epoch_valid = []
-        for epoch in datadict["epochs"]:
+        for epoch in rinex_parser.rinex_reader.rinex_epochs:
             if not self.is_valid_epoch(epoch):
                 continue
-            if epoch["id"] not in epoch_valid:
-                epoch_valid.append(epoch["id"])
+            if epoch.timestamp not in epoch_valid:
+                epoch_valid.append(ts_epoch_to_time("> " + epoch.timestamp))
 
         chkdoy["epochs_valid"] = len(epoch_valid)
-        epochs = []
-        for epoch in epoch_valid:
-            temp_utc = self.get_datetime_utc(epoch_str=epoch)
-            if temp_utc not in epochs:
-                epochs.append(temp_utc)
-        epochs = sorted(epochs)
+        epochs = sorted(epoch_valid)
 
         gaps_less = 0
         gaps_more = 0
         for i in range(len(epochs) - 1):
-            epoch_delta = (epochs[i + 1] - epochs[i]).total_seconds()
+            epoch_delta = int(epochs[i + 1] - epochs[i])
             if epoch_delta > chkdoy["epoch_interval"]:
                 chkdoy["gaps"].append(
                     {
-                        "gap_begin": epochs[i].strftime(cc.RNX_FORMAT_DATETIME),
-                        "gap_end": epochs[i + 1].strftime(cc.RNX_FORMAT_DATETIME),
+                        "gap_begin": datetime.datetime.fromtimestamp(
+                            epochs[i]
+                        ).strftime(cc.RNX_FORMAT_DATETIME),
+                        "gap_end": datetime.datetime.fromtimestamp(
+                            epochs[i + 1]
+                        ).strftime(cc.RNX_FORMAT_DATETIME),
                         "gap_epoch_count": epoch_delta / chkdoy["epoch_interval"],
                         "gap_duration": epoch_delta,  # (gap_epoch_count * datadict["epochInterval"])
                     }
@@ -195,11 +196,11 @@ class RinexQuality(object):
 
         return chkdoy
 
-    def get_rinex_availability_as_dict(self, datadict, gapsize=5):
+    def get_rinex_availability_as_dict(self, rinex_parser: RinexParser, gapsize=5):
         """
         Get RinexAvailability as dictionary
         """
-        chkdoy = self.do_prepare_datadict(datadict, gapsize)
+        chkdoy = self.do_prepare_datadict(rinex_parser, gapsize)
         rinex_v = []
         d = {
             "date": chkdoy["date"],
@@ -268,11 +269,11 @@ class RinexQuality(object):
         rinex_v_dict = self.get_rinex_availability_as_dict(datadict, gapsize)
         return self.get_rinex_availability_as_str(rinex_v_dict)
 
-    def get_rinstat_as_dict(self, datadict, gapsize=5):
+    def get_rinstat_as_dict(self, rinex_parser: RinexParser, gapsize=5):
         """
         Get RinstatData as a dictionary
         """
-        chkdoy = self.do_prepare_datadict(datadict, gapsize)
+        chkdoy = self.do_prepare_datadict(rinex_parser, gapsize)
         chkdoy["gaps_count"] = len(chkdoy["gaps"])
         chkdoy["epoch_first"] = datetime.datetime.strptime(
             chkdoy["epoch_first"], cc.RNX_FORMAT_DATETIME
@@ -312,7 +313,7 @@ class RinexQuality(object):
             **rinstat_dict
         )
 
-    def get_rinstat_out(self, datadict, gapsize=5):
+    def get_rinstat_out(self, rinex_parser: RinexParser, gapsize=5):
         """
         Create Dataframe with filter:
         - more than 5 GPS per epoch
@@ -346,5 +347,25 @@ class RinexQuality(object):
             gapsize: int, Amount of gaps to bother
 
         """
-        chkdoy = self.get_rinstat_as_dict(datadict, gapsize)
+        chkdoy = self.get_rinstat_as_dict(rinex_parser, gapsize)
         return self.get_rinstat_as_str(chkdoy)
+
+    def get_signal_strength(self, rinex_parser: RinexParser, obs_types=[]) -> dict:
+        s_data = {}
+        for epoch in rinex_parser.rinex_reader.rinex_epochs:
+            s_data[epoch.timestamp] = {}
+            for satellite in epoch.satellites:
+                if satellite["id"] not in s_data[epoch.timestamp]:
+                    s_data[epoch.timestamp][satellite["id"]] = []
+                for obs_type in satellite["observations"].keys():
+                    if not obs_types:
+                        if obs_type.startswith("S"):
+                            s_data[epoch.timestamp][satellite["id"]].append(
+                                (obs_type, satellite["observations"][obs_type][0])
+                            )
+                    else:
+                        if obs_type in obs_types:
+                            s_data[epoch.timestamp][satellite["id"]].append(
+                                (obs_type, satellite["observations"][obs_type][0])
+                            )
+        return s_data

@@ -34,6 +34,11 @@ def ts_epoch_to_time(line: str) -> float:
     )
 
 
+def ts_epoch_to_datetime(line: str) -> datetime.datetime:
+    dt = datetime.datetime.fromtimestamp(ts_epoch_to_time(line))
+    return dt
+
+
 def get_second_of_day(h: int, m: int, s: float) -> float:
     return h * 3600.0 + m * 60.0 + s
 

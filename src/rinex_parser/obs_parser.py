@@ -126,7 +126,13 @@ class RinexParser:
     def get_datadict(self):
         d = {}
         d["epochs"] = [e.to_dict() for e in self.rinex_reader.rinex_epochs]
-        d["epochInterval"] = self.rinex_reader.header.interval
+        interval = self.rinex_reader.header.interval
+        if interval <= 0:
+            interval = ts_epoch_to_time(
+                "> " + self.rinex_reader.rinex_epochs[1].timestamp
+            ) - ts_epoch_to_time("> " + self.rinex_reader.rinex_epochs[0].timestamp)
+
+        d["epochInterval"] = interval
         d["epochFirst"] = self.rinex_reader.rinex_epochs[0].timestamp
         d["epochLast"] = self.rinex_reader.rinex_epochs[-1].timestamp
         dtF = datetime.datetime.strptime(d["epochFirst"], RNX_FORMAT_OBS_TIME.strip())
