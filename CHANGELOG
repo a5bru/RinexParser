@@ -87,3 +87,4 @@ This is the inertial release
 ## 1.1.6 - 2025-03-29
 - FIX: RinexQuality uses class RinexEpoch instead of dict
 - ADD: Method ts_epoch_to_datetime
+- FIX: Generating RNX3 long name

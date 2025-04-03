@@ -260,13 +260,13 @@ class RinexQuality(object):
             rinex_v.append(rinex_v_i)
         return "\n".join(rinex_v)
 
-    def get_rinex_availability(self, datadict, gapsize=5):
+    def get_rinex_availability(self, rinex_parser: RinexParser, gapsize=5):
         """
         Should generate an output like:
 
         'YYYY-MM-DD;STATION;SECOND_BEGIN;SECOND_END;EPOCH_INTERVAL;SESSION_CODE;IS_ONLINE'
         """
-        rinex_v_dict = self.get_rinex_availability_as_dict(datadict, gapsize)
+        rinex_v_dict = self.get_rinex_availability_as_dict(rinex_parser, gapsize)
         return self.get_rinex_availability_as_str(rinex_v_dict)
 
     def get_rinstat_as_dict(self, rinex_parser: RinexParser, gapsize=5):

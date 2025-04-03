@@ -109,11 +109,22 @@ class RinexParser:
         doy = int(dtF.strftime("%03j"))
         period = f"{unitCount:02d}{unitPeriod}"
         rinex_origin = "S"
-        if len(self.rinex_file) > 32 and self.rinex_file[10] in ["R", "S"]:
-            rinex_origin = self.rinex_file[10]
+        rinex_path = os.path.basename(self.rinex_file)
+        monument_id = "0"
+        receiver_id = "0"
 
+        if len(rinex_path) > 32:
+            # get data origin
+            if rinex_path[10] in ["R", "S"]:
+                rinex_origin = rinex_path[10]
+            # get country
             if country.upper().ljust(3, "X")[:3] == "XXX":
-                country = self.rinex_file[6:9].upper().ljust(3, "X")
+                country = rinex_path[6:9].upper().ljust(3, "X")
+            # get monument_id
+            monument_id = rinex_path[4]
+            # get receiver_id
+            receiver_id = rinex_path[5]
+
         # c     c     y   j  h m
         # HKB200AUT_R_20250761900_01H_01S_MO.rnx
         # HKB200XXX_R_20250761900_01H_30S_MO.rnx
@@ -121,7 +132,7 @@ class RinexParser:
         if self.sampling > 0:
             smp = self.sampling
         smp = int(smp)
-        return f"{code}00{country}_{rinex_origin}_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
+        return f"{code}{monument_id}{receiver_id}{country}_{rinex_origin}_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
 
     def get_datadict(self):
         d = {}
@@ -165,7 +176,7 @@ class RinexParser:
         if os.path.isfile(rinex_file):
             self.rinex_file = rinex_file
         else:
-            logger.warn("Could not find file: {}".format(rinex_file))
+            logger.warning("Could not find file: {}".format(rinex_file))
             self.rinex_file = ""
 
     def get_rinex_file(self):
