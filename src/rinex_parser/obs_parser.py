@@ -268,7 +268,7 @@ class RinexParser:
             sys_obs_types=self.rinex_reader.header.sys_obs_types,
             sys_order=self.rinex_reader.header.sys_obs_types.keys(),
         )
-        outlines += ["\n"]
+        # outlines += ["\n"]
         logger.debug(f"Start writing to file {out_file}.")
         with open(out_file, "w") as rnx:
             rnx.writelines(outlines)

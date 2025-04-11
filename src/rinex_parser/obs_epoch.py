@@ -281,7 +281,7 @@ class RinexEpoch(object):
                         new_data = f"{new_data}{new_part}"
                 new_data = f"{item['id']:3s}{new_data}\n"
                 sorted_items[sat_sys].append(new_data)
-                # data_lines.append(new_data)
+                # data_lines.append(new_data.strip() + "\n")
             except Exception as e:
                 print(e)
 

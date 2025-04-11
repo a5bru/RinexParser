@@ -424,7 +424,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
     def to_rinex3(self, sys_obs_types: dict = {}) -> list[str]:
         self.rinex_export_version = 3
         rinex_header = [
-            """{format_version:9s}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
+            """{format_version:>9s}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
 {program:20s}{run_by:20s}{run_date:20s}PGM / RUN BY / DATE
 {comment}
 {marker_name:60s}MARKER NAME
