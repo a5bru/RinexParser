@@ -1,4 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+"""Logging configuration for RINEX parser.
+
+Sets up a configured logger instance for use throughout the RINEX parser module.
+"""
 
 import logging
 

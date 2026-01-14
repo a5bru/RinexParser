@@ -165,3 +165,6 @@ data/*
 .vscode
 tests
 _archive
+
+NSDL00AUT*
+.context

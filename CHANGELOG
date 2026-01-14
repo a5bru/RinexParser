@@ -5,41 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## 0.1.0 - 2018-11-24
-### Added
-This is the inertial release
+- ADD: This is the inertial release
 
 ## 0.1.4 - 2018-11-28
-### Added
-- Splitting timeseries to hours within method *get_rinex_availability*
-### Updated
-- Restructured folders and files for packaging
+- ADD: Splitting timeseries to hours within method *get_rinex_availability*
+- CHG: Restructured folders and files for packaging
 
 ## 0.1.5 - 2019-01-11
-### Added
-- RinexQuality: I added a static method 
-  RinexQuality.get_session_code(second_of_hour) to solve this issue
-### Updated
-- RinexQuality: fixed wrong session code of last entry. Solved with the static
-  method "RienxQuality.get_session_code(second_of_hour)
+- ADD: RinexQuality: I added a static method RinexQuality.get_session_code(second_of_hour) to solve this issue
+- CHG: RinexQuality: fixed wrong session code of last entry. Solved with the static method "RienxQuality.get_session_code(second_of_hour)
 
 ## 0.1.6 - 2019-02-14
-### Updated
-- RinexFactory: class lives no in separate file, can build classes from file or by version
-- RinexObsReader: class holds now initial part for Rinex2 and Rinex3
-- RinexObsHeader: class holds now initial part for Rinex2 and Rinex3
+- CHG: RinexFactory: class lives no in separate file, can build classes from file or by version
+- CHG: RinexObsReader: class holds now initial part for Rinex2 and Rinex3
+- CHG: RinexObsHeader: class holds now initial part for Rinex2 and Rinex3
 
 ## 1.0.1 - 2022-08-30
-### Changed
-- RinexQuality: RinStat format adapted
+- CHG: RinexQuality: RinStat format adapted
 
 ## 1.0.2 - 2023-11-24
-### Added
-- RinexObsHeader: Added REGEX for L3 signals and D obs types (descriptors)
-### Changed
-- RinexObsReader: method read_satellite correct parsing ob decriptors
+- ADD: RinexObsHeader: Added REGEX for L3 signals and D obs types (descriptors)
+- CHG: RinexObsReader: method read_satellite correct parsing ob decriptors
 
 ## 1.0.3 - 2025-02-27
-- Reset everything
+- FIX: Reset everything
 
 ## 1.0.4 - 2025-02-27
 - CHG: moved rinex_parser into src directory
@@ -92,3 +81,11 @@ This is the inertial release
 ## 1.1.7 - 2025-04-11
 - FIX: removed empty new lines
 - FIX: Header version alignment
+
+## 1.2.0 - 2026-01-14
+- REM: package convertdate
+- ADD: entrypoint rxp
+- CHG: refactoring all modules
+
+## 1.2.1 - 2026-01-14
+- FIX: merging new features into develop

@@ -20,8 +20,11 @@ classifieres = [
   "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
 ]
 dependencies = []
-
 dynamic = ["version"]
+
+[project.scripts]
+rxp = "rinex_parser.cli:main"
+ridah-obs = "rinex_parser.scripts.main:run"
 
 [project.urls]
 Homepage = "https://github.com/a5bru/RinexParser"
@@ -29,6 +32,3 @@ Issues = "https://github.com/a5bru/RinexParser/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rinex_parser"]
-
-[project.scripts]
-ridah-obs = "rinex_parser.scripts.main:run"

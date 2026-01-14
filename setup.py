@@ -30,14 +30,16 @@ setuptools.setup(
     packages=setuptools.find_packages(exclude=("tests", "docs", "env", ".vscode")),
     keywords="rinex parser rinex2 rinex3 gnss gps galileo beidou glonass",
     classifiers=[
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Development Status :: 3 - Alpha",
+        "Programming Language :: Python :: 3.8",
+        "Development Status :: 4 - Beta",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
         "Operating System :: POSIX :: Linux",
     ],
+    entry_points={
+        "console_scripts": [
+            "rxp=rinex_parser.cli:main",
+        ],
+    },
 )
