@@ -19,7 +19,7 @@ APP_NAME = f"RiDaH v{VERSION}"
 
 class RinexObsHeader(abc.ABC):
     """Base class for RINEX observation file headers.
-    
+
     Handles parsing and management of RINEX observation file header information.
     """
 
@@ -28,7 +28,7 @@ class RinexObsHeader(abc.ABC):
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize RINEX observation header.
-        
+
         Args:
             **kwargs: Optional header fields with sensible defaults.
         """
@@ -39,8 +39,7 @@ class RinexObsHeader(abc.ABC):
         self.satellites: Dict[str, int] = {}
         self.run_by: str = kwargs.get("run_by", "ASBRU")
         self.run_date: str = kwargs.get(
-            "run_date",
-            datetime.datetime.now().strftime("%FT%H:%MZ")
+            "run_date", datetime.datetime.now().strftime("%FT%H:%MZ")
         )
         self.marker_name: Optional[str] = kwargs.get("marker_name")
         self.marker_number: Optional[str] = kwargs.get("marker_number")
@@ -51,30 +50,14 @@ class RinexObsHeader(abc.ABC):
         self.receiver_version: Optional[str] = kwargs.get("receiver_version")
         self.antenna_number: Optional[str] = kwargs.get("antenna_number")
         self.antenna_type: Optional[str] = kwargs.get("antenna_type")
-        self.approx_position_x: Optional[float] = kwargs.get(
-            "approx_position_x"
-        )
-        self.approx_position_y: Optional[float] = kwargs.get(
-            "approx_position_y"
-        )
-        self.approx_position_z: Optional[float] = kwargs.get(
-            "approx_position_z"
-        )
-        self.antenna_delta_height: Optional[float] = kwargs.get(
-            "antenna_delta_height"
-        )
-        self.antenna_delta_east: Optional[float] = kwargs.get(
-            "antenna_delta_east"
-        )
-        self.antenna_delta_north: Optional[float] = kwargs.get(
-            "antenna_delta_north"
-        )
-        self.wavelength_fact_l1: Optional[int] = kwargs.get(
-            "wavelength_fact_l1"
-        )
-        self.wavelength_fact_l2: Optional[int] = kwargs.get(
-            "wavelength_fact_l2"
-        )
+        self.approx_position_x: Optional[float] = kwargs.get("approx_position_x")
+        self.approx_position_y: Optional[float] = kwargs.get("approx_position_y")
+        self.approx_position_z: Optional[float] = kwargs.get("approx_position_z")
+        self.antenna_delta_height: Optional[float] = kwargs.get("antenna_delta_height")
+        self.antenna_delta_east: Optional[float] = kwargs.get("antenna_delta_east")
+        self.antenna_delta_north: Optional[float] = kwargs.get("antenna_delta_north")
+        self.wavelength_fact_l1: Optional[int] = kwargs.get("wavelength_fact_l1")
+        self.wavelength_fact_l2: Optional[int] = kwargs.get("wavelength_fact_l2")
         self.wavelength_fact: Optional[int] = kwargs.get("wavelength_fact")
         self.observation_types: List[str] = kwargs.get("observation_types", [])
         self.interval: Optional[int] = kwargs.get("interval")
@@ -95,7 +78,7 @@ class RinexObsHeader(abc.ABC):
     @property
     def datadict(self) -> Dict[str, Any]:
         """Get header data as dictionary.
-        
+
         Returns:
             dict: Dictionary with key header information.
         """
@@ -108,10 +91,10 @@ class RinexObsHeader(abc.ABC):
     @classmethod
     def from_header(cls, header_string: str) -> Optional["RinexObsHeader"]:
         """Create header instance from header string.
-        
+
         Args:
             header_string: Raw RINEX header text.
-            
+
         Returns:
             RinexObsHeader: Parsed header or None if parsing fails.
         """
@@ -127,10 +110,10 @@ class RinexObsHeader(abc.ABC):
     @staticmethod
     def parse_version_type(line: str) -> Dict[str, Any]:
         """Parse RINEX version and type from header line.
-        
+
         Args:
             line: First line of RINEX header.
-            
+
         Returns:
             dict: Dictionary with format_version, file_type, satellite_system.
         """
@@ -142,13 +125,13 @@ class RinexObsHeader(abc.ABC):
             "file_type": file_type,
             "satellite_system": satellite_system,
         }
-    
+
     @abc.abstractmethod
     def to_rinex3(self, *args: Any) -> str:
         """Export header in RINEX 3 format.
-        
+
         Must be implemented by subclasses.
-        
+
         Returns:
             str: RINEX 3 formatted header.
         """
@@ -156,7 +139,7 @@ class RinexObsHeader(abc.ABC):
 
     def set_interval(self, line: str) -> None:
         """Parse and set observation interval from header line.
-        
+
         Args:
             line: Header line containing interval information.
         """
@@ -164,7 +147,7 @@ class RinexObsHeader(abc.ABC):
 
     def set_version_type(self, line: str) -> None:
         """Parse and set RINEX version and type from header line.
-        
+
         Args:
             line: First line of RINEX header.
         """
@@ -398,7 +381,7 @@ class Rinex2ObsHeader(RinexObsHeader):
 
     def get_observation_types(self) -> str:
         ots = []
-        s = ""
+        s = []
         for ot in self.observation_types:
             if ot == "C1C" and self.rinex_export_version == 2:
                 ot = "C1"
@@ -412,13 +395,13 @@ class Rinex2ObsHeader(RinexObsHeader):
             ot = ots[i]
             if i % 9 == 0:
                 if i == 0:
-                    s = "{:6d}".format(len(ots))
+                    s.append(f"{len(ots):6d}")
                 else:
-                    s = "\n{:6s}".format("")
-            s += "{:4s}{:2s}".format("", ot)
+                    s.append(" " * 6)
+            s.append(f"{'':4s}{ot:2s}")
             if (i % 9 == 8) or (i == len(ots) - 1):
-                s = "{:60s}# / TYPES OF OBSERV".format(s)
-        return s
+                s.append(f"{s:60s}# / TYPES OF OBSERV")
+        return "\n".join(s)
 
 
 class Rinex3ObsHeader(Rinex2ObsHeader):
@@ -478,7 +461,8 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
     def to_rinex3(self, sys_obs_types: dict = {}) -> list[str]:
         self.rinex_export_version = 3
-        rinex_header = ["""{format_version:9.2f}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
+        rinex_header = [
+            """{format_version:9.2f}{empty:11s}{file_type:20s}{satellite_system:20s}RINEX VERSION / TYPE
 {program:20s}{run_by:20s}{run_date:20s}PGM / RUN_BY / DATE
 {comment}
 {marker_name:60s}MARKER NAME
@@ -488,7 +472,10 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 {receiver_number:20s}{receiver_type:20s}{receiver_version:20s}REC # / TYPE / VERS
 {antenna_number:20s}{antenna_type:20s}{empty:20s}ANT # / TYPE
 {approx_position_x:14.4f}{approx_position_y:14.4f}{approx_position_z:14.4f}{empty:18s}APPROX POSITION XYZ
-{antenna_delta_height:14.4f}{antenna_delta_east:14.4f}{antenna_delta_north:14.4f}{empty:18s}ANTENNA: DELTA H/E/N""".format(**self.__dict__)]
+{antenna_delta_height:14.4f}{antenna_delta_east:14.4f}{antenna_delta_north:14.4f}{empty:18s}ANTENNA: DELTA H/E/N""".format(
+                **self.__dict__
+            )
+        ]
         adx = self.get_antenna_delta_xyz()
         if adx:
             rinex_header.append(adx)
@@ -496,9 +483,11 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         ots = self.get_observation_types().strip()
         if ots:
             rinex_header.append(ots)
-            rinex_header.append("{wavelength_fact_l1:6d}{wavelength_fact_l2:6d}{wavelength_fact:6d}{empty:42s}WAVELENGTH FACT L1/L2".format(
-                **self.__dict__
-            ))
+            rinex_header.append(
+                "{wavelength_fact_l1:6d}{wavelength_fact_l2:6d}{wavelength_fact:6d}{empty:42s}WAVELENGTH FACT L1/L2".format(
+                    **self.__dict__
+                )
+            )
 
         if sys_obs_types:
             logger.debug("Overwrite OBS TYPES in header")
@@ -509,28 +498,32 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
             rinex_header.append(sot)
 
         rinex_header.append(f"{self.interval:10.3f}{' ':50s}INTERVAL")
-        
+
         if self.first_observation is not None:
-            rinex_header.append("{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF FIRST OBS".format(
-                time_of_obs=self.first_observation.strftime(
-                    c.RNX_FORMAT_OBS_TIME),
-                empty="",
-                time_system=self.time_system
-            ))
+            rinex_header.append(
+                "{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF FIRST OBS".format(
+                    time_of_obs=self.first_observation.strftime(c.RNX_FORMAT_OBS_TIME),
+                    empty="",
+                    time_system=self.time_system,
+                )
+            )
         if self.last_observation is not None:
-            rinex_header.append("{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF LAST OBS".format(
-                time_of_obs=self.last_observation.strftime(
-                    c.RNX_FORMAT_OBS_TIME),
-                empty="",
-                time_system=self.time_system
-            ))
+            rinex_header.append(
+                "{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF LAST OBS".format(
+                    time_of_obs=self.last_observation.strftime(c.RNX_FORMAT_OBS_TIME),
+                    empty="",
+                    time_system=self.time_system,
+                )
+            )
         if self.rcv_clock_offset is not None:
-            rinex_header.append("{:6d}{:54s}RCV CLOCK OFFS APPL".format(
-                self.rcv_clock_offset, ""))
-            
+            rinex_header.append(
+                "{:6d}{:54s}RCV CLOCK OFFS APPL".format(self.rcv_clock_offset, "")
+            )
+
         if self.total_satellites > 0:
-            rinex_header.append("{:6d}{:54s}# OF SATELLITES".format(
-                self.total_satellites, ""))
+            rinex_header.append(
+                "{:6d}{:54s}# OF SATELLITES".format(self.total_satellites, "")
+            )
 
         apc = self.get_antenna_phasecenter()
         if apc:
@@ -639,7 +632,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         """ """
         if self.sys_obs_types is None:
             return None
-        
+
         sot = []
         for ss in c.RINEX3_SATELLITE_SYSTEMS:
             if ss in self.sys_obs_types:
@@ -648,7 +641,7 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
                     if i == 0:
                         temp = f"{ss}  {len_obs:3d}"
                     elif i > 1 and (i % 13 == 0):
-                        temp = " "*6
+                        temp = " " * 6
                     temp += f" {v:3s}"
                     if (i % 13 == 12) and (i < len_obs - 1):
                         sot.append(f"{temp:60s}SYS / # / OBS TYPES".strip())
@@ -941,7 +934,6 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
 
             elif "SYS / # / OBS TYPES" in header_label:
                 self.set_sys_obs_types(line)
-                
 
             # elif 'SIGNAL STRENGTH UNIT' in header_label:
             #     self.set_signal_strength_unit(line)

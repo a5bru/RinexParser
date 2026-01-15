@@ -1,6 +1,8 @@
 import math
 import datetime
 
+from typing import Tuple
+
 IGREG = 15 + 31 * (10 + 12 * 1582)
 
 MON = 0
@@ -16,7 +18,7 @@ GPS_WEEK_DAYS = (MON, TUE, WED, THU, FRI, SAT, SUN)
 T0_GPS = datetime.datetime(1980, 1, 6)
 
 
-def jd2ymd(jd) -> tuple[int, int, int]:
+def jd2ymd(jd: float) -> Tuple[int, int, int]:
     """Convert Julian Date to (y, m, d)."""
 
     jd += 0.5

@@ -79,13 +79,21 @@ class RinexQuality:
         observation_descriptors=["L1", "L2"],
         satellites=5,
     ):
-        """
-        Checks if epoch suffices validity criterias. Per default these are:
-
-        * Satellite System contains is GPS
-        * At Least 5 Satellites within each Satellite System
-
-        Returns: bool, True, if suffices criterias, else False
+        """Check if epoch meets validity criteria.
+        
+        Default criteria:
+        - Contains GPS satellite system
+        - Contains L1 and L2 observations
+        - At least 5 satellites within each system
+        
+        Args:
+            epoch: Epoch data dictionary or RinexEpoch object containing satellites.
+            satellite_systems: List of required satellite systems (default: ["G"]).
+            observation_descriptors: List of required observations (default: ["L1", "L2"]).
+            satellites: Minimum number of satellites required (default: 5).
+            
+        Returns:
+            bool: True if epoch meets all criteria, False otherwise.
         """
         
     @staticmethod
@@ -160,8 +168,7 @@ class RinexQuality:
         
         return datadict
       
-
-    def is_valid_epoch(
+    def is_valid_epoch_legacy(
         self,
         epoch: Dict[str, Any] | RinexEpoch,
         satellite_systems: List[str] | None = None,

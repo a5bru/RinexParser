@@ -8,10 +8,8 @@ import datetime
 import os
 import re
 import traceback
-from functools import lru_cache
 from io import StringIO
 from typing import Any, Dict, List
-
 from rinex_parser import constants as cc
 from rinex_parser.logger import logger
 from rinex_parser.obs_header import (
@@ -19,17 +17,27 @@ from rinex_parser.obs_header import (
     Rinex3ObsHeader,
     RinexObsHeader,
 )
-from rinex_parser.obs_epoch import RinexEpoch, Satellite, Observation, Satellite, Observation
+from rinex_parser.obs_epoch import (
+    RinexEpoch,
+    Satellite,
+    Observation,
+    Satellite,
+    Observation,
+    EPOCH_MAX,
+    EPOCH_MIN,
+    ts_to_second_of_day,
+    ts_to_datetime,
+)
 
 __updated__ = "2016-11-16"
 
 
 class RinexObsReader:
     """Base class for reading RINEX observation files.
-    
+
     Handles reading and parsing of RINEX observation data in both versions 2 and 3.
     Subclasses implement version-specific parsing logic.
-    
+
     Attributes:
         header: RinexObsHeader instance containing file header information.
         datadict: Dictionary containing parsed observation epochs.
@@ -39,9 +47,19 @@ class RinexObsReader:
 
     RINEX_HEADER_CLASS = RinexObsHeader
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        interval_filter: int = 0,
+        filter_on_read: bool = True,
+        crop_beg: float = EPOCH_MIN,
+        crop_end: float = EPOCH_MAX,
+        filter_sat_sys: str = "",
+        filter_sat_pnr: str = "",
+        filter_sat_obs: str = "",
+        **kwargs: Any,
+    ) -> None:
         """Initialize the RINEX observation reader.
-        
+
         Args:
             interval_filter: Epoch interval filter in seconds (default: 0).
             rinex_obs_file: Path to RINEX observation file (default: "").
@@ -50,12 +68,14 @@ class RinexObsReader:
             skip_datadict: Skip building full datadict for performance (default: False).
         """
         self.header = self.RINEX_HEADER_CLASS()
-        self.interval_filter: int = kwargs.get("interval_filter", 0)
-        self.filter_on_read: bool = kwargs.get("filter_on_read", True)
+        self.interval_filter = interval_filter
+        self.filter_on_read = filter_on_read
         self.found_obs_types = {}
-        self.filter_sat_sys: list = kwargs.get("filter_sat_sys", "").split(",")
-        self.filter_sat_pnr: list = kwargs.get("filter_sat_pnr", "").split(",")
-        self.filter_sat_obs: list = kwargs.get("filter_sat_obs", "").split(",")
+        self.crop_beg = crop_beg
+        self.crop_end = crop_end
+        self.filter_sat_sys: List[str] = filter_sat_sys.split(",")
+        self.filter_sat_pnr: List[str] = filter_sat_pnr.split(",")
+        self.filter_sat_obs: List[str] = filter_sat_obs.split(",")
         self.sat_stats = {}  # {"G01": {"C1C": 4}, ...}
         self.backup_epochs: List[RinexEpoch] = []
         self.backup_interval: int = 0
@@ -69,10 +89,10 @@ class RinexObsReader:
     @staticmethod
     def get_start_time(file_sequence: str) -> datetime.time:
         """Get start time for a RINEX file sequence.
-        
+
         Args:
             file_sequence: File sequence code ("0" or "a"-"x").
-            
+
         Returns:
             datetime.time: Start time of the file sequence.
         """
@@ -86,31 +106,29 @@ class RinexObsReader:
         interval: int,
     ) -> int:
         """Get maximum number of epochs for a file sequence.
-        
+
         Args:
             file_sequence: File sequence code ("0" or "a"-"x").
             interval: Epoch interval in seconds.
-            
+
         Returns:
             int: Maximum number of epochs possible in the file.
         """
         start = datetime.datetime.combine(
-            datetime.date.today(),
-            Rinex2ObsReader.get_start_time(file_sequence)
+            datetime.date.today(), Rinex2ObsReader.get_start_time(file_sequence)
         )
         end = datetime.datetime.combine(
-            datetime.date.today(),
-            Rinex2ObsReader.get_end_time(file_sequence, interval)
+            datetime.date.today(), Rinex2ObsReader.get_end_time(file_sequence, interval)
         )
         return int((end - start).total_seconds() / interval) + 1
 
     @staticmethod
     def prepare_line(line: str) -> str:
         """Prepare a line for parsing by normalizing line endings and padding.
-        
+
         Args:
             line: Raw line from file.
-            
+
         Returns:
             str: Normalized line padded to 16-character boundary.
         """
@@ -122,11 +140,11 @@ class RinexObsReader:
     @staticmethod
     def get_end_time(file_sequence: str, interval: int) -> datetime.time:
         """Get end time for a RINEX file sequence.
-        
+
         Args:
             file_sequence: File sequence code ("0" or "a"-"x").
             interval: Epoch interval in seconds.
-            
+
         Returns:
             datetime.time: End time of the file sequence.
         """
@@ -137,11 +155,11 @@ class RinexObsReader:
     @staticmethod
     def is_valid_filename(filename: str, rinex_version: int | float = 2) -> bool:
         """Check if a filename conforms to RINEX naming standards.
-        
+
         Args:
             filename: The filename to validate.
             rinex_version: RINEX version (2 or 3, default: 2).
-            
+
         Returns:
             bool: True if filename matches the appropriate RINEX format.
         """
@@ -153,15 +171,15 @@ class RinexObsReader:
         else:
             return False
         return re.match(filename_regex, filename) is not None
-    
+
     def set_rinex_obs_file(self, rinex_obs_file: str) -> None:
         """Set the RINEX observation file path.
-        
+
         Must be implemented by subclasses.
-        
+
         Args:
             rinex_obs_file: Path to the RINEX observation file.
-            
+
         Raises:
             NotImplementedError: Always (must be implemented in subclass).
         """
@@ -169,14 +187,14 @@ class RinexObsReader:
 
     def correct_year2(self, year2: int) -> int:
         """Convert 2-digit year to 4-digit year.
-        
+
         According to the RINEX Manual 2.10, chapter "6.5 2-digit Years":
         - Years 80-99 map to 1980-1999
         - Years 00-79 map to 2000-2079
-        
+
         Args:
             year2: Two-digit year.
-            
+
         Returns:
             int: Four-digit year.
         """
@@ -187,23 +205,23 @@ class RinexObsReader:
 
     def do_thinning(self, interval: int) -> None:
         """Reduce epochs to only those at specified interval boundaries.
-        
+
         Backs up original epochs and replaces them with thinned set.
         Optimized to pre-calculate times for faster filtering.
-        
+
         Args:
             interval: Epoch interval in seconds.
         """
         if interval <= 0:
             return
-        
+
         # Pre-calculate all day_seconds to avoid repeated computation
         thinned_epochs = []
         for epoch in self.rinex_epochs:
             seconds = epoch.get_day_seconds()
             if seconds % interval == 0:
                 thinned_epochs.append(epoch)
-        
+
         if len(self.backup_epochs) == 0:
             self.backup_epochs = self.rinex_epochs
             self.backup_interval = self.header.interval
@@ -219,7 +237,7 @@ class RinexObsReader:
 
     def to_rinex2(self) -> str:
         """Export header and epochs in RINEX 2 format.
-        
+
         Uses StringIO for efficient string building.
         """
         if self.rinex_epochs:
@@ -227,49 +245,44 @@ class RinexObsReader:
 
         output = StringIO()
         output.write(self.header.to_rinex2())
-        output.write('\n')
-        
+        output.write("\n")
+
         for rinex_epoch in self.rinex_epochs:
             if not isinstance(rinex_epoch, RinexEpoch):
                 raise TypeError("rinex_epochs must contain RinexEpoch instances")
             output.write(rinex_epoch.to_rinex2())
-            output.write('\n')
-        
+            output.write("\n")
+
         return output.getvalue()
 
     def to_rinex3(self) -> str:
         """Export header and epochs in RINEX 3 format.
-        
+
         Uses StringIO for efficient string building.
         """
         if self.rinex_epochs:
+            logger.info("Updating header observations before RINEX 3 export")
             self.update_header_obs()
 
-        output = StringIO()
-        output.write(self.header.to_rinex3())
-        output.write('\n')
-        
+        if self.interval_filter > 0:
+            self.header.interval = self.interval_filter
+
+        output = []
+
+        logger.info("Exporting RINEX 3 header")
+        output.append(self.header.to_rinex3())
+
+        logger.info(f"Exporting RINEX 3 epochs ({len(self.rinex_epochs)} total)")
         for rinex_epoch in self.rinex_epochs:
             if not isinstance(rinex_epoch, RinexEpoch):
                 raise TypeError("rinex_epochs must contain RinexEpoch instances")
+            output.append(rinex_epoch.to_rinex3())
 
-            seconds_of_day = (
-                rinex_epoch.timestamp.hour * 3600
-                + rinex_epoch.timestamp.minute * 60
-                + rinex_epoch.timestamp.second
-            )
+        return "\n".join(output) + "\n"
 
-            if self.interval_filter <= 0 or (
-                seconds_of_day % self.interval_filter == 0
-            ):
-                output.write(rinex_epoch.to_rinex3())
-                output.write('\n')
-        
-        return output.getvalue()
-
-    def read_header(self, sort_obs_types: bool = True) -> None:
+    def read_header_from_file(self, sort_obs_types: bool = True) -> None:
         """Read and parse the RINEX file header.
-        
+
         Args:
             sort_obs_types: Whether to sort observation types (default: True).
         """
@@ -283,7 +296,7 @@ class RinexObsReader:
 
     def add_satellite(self, satellite: str) -> None:
         """Add or increment count for a satellite in the header.
-        
+
         Args:
             satellite: Satellite ID matching regex pattern [GR][ \\d]{2}.
         """
@@ -293,10 +306,10 @@ class RinexObsReader:
 
     def has_satellite_system(self, sat_sys: str) -> bool:
         """Check if a satellite system is present in the data.
-        
+
         Args:
             sat_sys: Satellite system ID (e.g., "G", "R", "E").
-            
+
         Returns:
             bool: True if system is present, False otherwise.
         """
@@ -308,8 +321,8 @@ class RinexObsReader:
     def update_header_obs(self) -> None:
         """Update header with first and last observation times."""
         # First and Last Observation
-        self.header.first_observation = self.rinex_epochs[0].timestamp
-        self.header.last_observation = self.rinex_epochs[-1].timestamp
+        self.header.first_observation = ts_to_datetime(self.rinex_epochs[0].timestamp)
+        self.header.last_observation = ts_to_datetime(self.rinex_epochs[-1].timestamp)
 
     def read_satellite(
         self,
@@ -317,126 +330,68 @@ class RinexObsReader:
         line: str,
     ) -> Dict[str, Any]:
         """Parse satellite observation data from a line.
-        
+
         Must be implemented by subclasses.
-        
+
         Args:
             sat_id: Satellite identifier.
             line: Raw observation line data.
-            
+
         Returns:
             dict: Satellite observation dictionary.
-            
+
         Raises:
             NotImplementedError: Always (must be implemented in subclass).
         """
         raise NotImplementedError
 
-    def read_data_to_dict(self) -> None:
+    def read_epochs_from_file(self) -> None:
         """Read observation data and populate datadict.
-        
+
         Must be implemented by subclasses.
-        
+
         Raises:
             NotImplementedError: Always (must be implemented in subclass).
         """
         raise NotImplementedError
-    
+
     def to_rinex2_file(self, output_path: str) -> None:
         """Stream RINEX 2 output directly to file for better performance.
-        
+
         Args:
             output_path: Path to output file.
         """
         if self.rinex_epochs:
             self.update_header_obs()
-        
-        with open(output_path, 'w', buffering=65536, encoding='utf-8') as f:
+
+        with open(output_path, "w", buffering=65536, encoding="utf-8") as f:
             f.write(self.header.to_rinex2())
-            f.write('\n')
-            
+            f.write("\n")
+
             for rinex_epoch in self.rinex_epochs:
                 if not isinstance(rinex_epoch, RinexEpoch):
                     raise TypeError("rinex_epochs must contain RinexEpoch instances")
                 f.write(rinex_epoch.to_rinex2())
-                f.write('\n')
-    
-    def to_rinex3_file(self, output_path: str) -> None:
-        """Stream RINEX 3 output directly to file for better performance.
-        
-        Args:
-            output_path: Path to output file.
-        """
-        if self.rinex_epochs:
-            self.update_header_obs()
-        
-        with open(output_path, 'w', buffering=65536, encoding='utf-8') as f:
-            f.write(self.header.to_rinex3())
-            f.write('\n')
-            
-            for rinex_epoch in self.rinex_epochs:
-                if not isinstance(rinex_epoch, RinexEpoch):
-                    raise TypeError("rinex_epochs must contain RinexEpoch instances")
-                
-                seconds_of_day = (
-                    rinex_epoch.timestamp.hour * 3600
-                    + rinex_epoch.timestamp.minute * 60
-                    + rinex_epoch.timestamp.second
-                )
-                
-                if self.interval_filter <= 0 or (
-                    seconds_of_day % self.interval_filter == 0
-                ):
-                    f.write(rinex_epoch.to_rinex3())
-                    f.write('\n')
-    
+                f.write("\n")
+
     def to_rinex2_file(self, output_path: str) -> None:
         """Stream RINEX 2 output directly to file for better performance.
-        
+
         Args:
             output_path: Path to output file.
         """
         if self.rinex_epochs:
             self.update_header_obs()
-        
-        with open(output_path, 'w', buffering=65536, encoding='utf-8') as f:
+
+        with open(output_path, "w", buffering=65536, encoding="utf-8") as f:
             f.write(self.header.to_rinex2())
-            f.write('\n')
-            
+            f.write("\n")
+
             for rinex_epoch in self.rinex_epochs:
                 if not isinstance(rinex_epoch, RinexEpoch):
                     raise TypeError("rinex_epochs must contain RinexEpoch instances")
                 f.write(rinex_epoch.to_rinex2())
-                f.write('\n')
-    
-    def to_rinex3_file(self, output_path: str) -> None:
-        """Stream RINEX 3 output directly to file for better performance.
-        
-        Args:
-            output_path: Path to output file.
-        """
-        if self.rinex_epochs:
-            self.update_header_obs()
-        
-        with open(output_path, 'w', buffering=65536, encoding='utf-8') as f:
-            f.write(self.header.to_rinex3())
-            f.write('\n')
-            
-            for rinex_epoch in self.rinex_epochs:
-                if not isinstance(rinex_epoch, RinexEpoch):
-                    raise TypeError("rinex_epochs must contain RinexEpoch instances")
-                
-                seconds_of_day = (
-                    rinex_epoch.timestamp.hour * 3600
-                    + rinex_epoch.timestamp.minute * 60
-                    + rinex_epoch.timestamp.second
-                )
-                
-                if self.interval_filter <= 0 or (
-                    seconds_of_day % self.interval_filter == 0
-                ):
-                    f.write(rinex_epoch.to_rinex3())
-                    f.write('\n')
+                f.write("\n")
 
 
 class Rinex2ObsReader(RinexObsReader):
@@ -475,18 +430,18 @@ class Rinex2ObsReader(RinexObsReader):
     RINEX_DATELINE_REGEXP = cc.RINEX2_DATELINE_REGEXP
     RINEX_DATELINE_REGEXP_SHORT = cc.RINEX2_DATELINE_REGEXP_SHORT
     RINEX_SATELLITES_REGEXP = cc.RINEX2_SATELLITES_REGEXP
-    
+
     # Cached compiled regex patterns for performance
     _dateline_re = None
     _dateline_short_re = None
-    
+
     @classmethod
     def _get_dateline_re(cls):
         """Get cached compiled dateline regex."""
         if cls._dateline_re is None:
             cls._dateline_re = re.compile(cls.RINEX_DATELINE_REGEXP)
         return cls._dateline_re
-    
+
     @classmethod
     def _get_dateline_short_re(cls):
         """Get cached compiled short dateline regex."""
@@ -500,10 +455,10 @@ class Rinex2ObsReader(RinexObsReader):
 
     def set_rinex_obs_file(self, rinex_obs_file: str) -> None:
         self.rinex_obs_file = rinex_obs_file
-        self.station_doy_session = os.path.basename(
-            self.rinex_obs_file).split(".")[0]
+        self.station_doy_session = os.path.basename(self.rinex_obs_file).split(".")[0]
         if not self.__class__.is_valid_filename(
-            os.path.basename(self.rinex_obs_file), self.header.format_version):
+            os.path.basename(self.rinex_obs_file), self.header.format_version
+        ):
             raise ValueError(
                 f"Invalid RINEX filename for version {self.header.format_version}: "
                 f"{os.path.basename(self.rinex_obs_file)}"
@@ -519,7 +474,7 @@ class Rinex2ObsReader(RinexObsReader):
     def read_satellite(self, sat_id: str, line: str) -> Satellite:
         """
         Parses trough rnx observation and creates Satellite object. Referring to the RINEX Handbook 2.10
-        there are only up to 5 observation types per line. This method parses any line length 
+        there are only up to 5 observation types per line. This method parses any line length
 
         Args:
             sat_id: str satellite number/name
@@ -561,18 +516,14 @@ class Rinex2ObsReader(RinexObsReader):
                 # Do not store empty obs_type
                 continue
 
-            observations.append(Observation(
-                code=obs_type,
-                value=obs_val,
-                lli=obs_lli,
-                ss=obs_ss
-            ))
-        
+            observations.append(
+                Observation(code=obs_type, value=obs_val, lli=obs_lli, ss=obs_ss)
+            )
+
         return Satellite(sat_id, observations)
 
-    def read_data_to_dict(self) -> None:
-        """
-        """
+    def read_epochs_from_file(self) -> None:
+        """ """
         # SKIP HEADER
         with open(self.rinex_obs_file, "r") as handler:
             end_of_header = False
@@ -603,7 +554,7 @@ class Rinex2ObsReader(RinexObsReader):
                     epoch = timestamp.strftime("%Y %m %d %H %M %S.%f").ljust(27, "0")
                     epoch_satellites = []
 
-                    sats = r.group('sat1').strip()
+                    sats = r.group("sat1").strip()
                     # Number of Satellites
                     nos = int(r.group("nos"))
                     if nos == 0:
@@ -619,7 +570,7 @@ class Rinex2ObsReader(RinexObsReader):
                     # Get Observation Data
                     satellites = []
                     for j in range(nos):
-                        sat_num = sats[(3 * j):(3 * (j + 1))]
+                        sat_num = sats[(3 * j) : (3 * (j + 1))]
                         self.add_satellite(sat_num)
 
                         raw_obs = ""
@@ -635,44 +586,20 @@ class Rinex2ObsReader(RinexObsReader):
 
                     rinex_epoch = RinexEpoch(
                         timestamp=datetime.datetime.strptime(
-                            timestamp.strftime("%FT%TZ"), cc.RNX_FORMAT_DATETIME),
+                            timestamp.strftime("%FT%TZ"), cc.RNX_FORMAT_DATETIME
+                        ),
                         observation_types=self.header.observation_types,
                         satellites=satellites,
-                        rcv_clock_offset=self.header.rcv_clock_offset
+                        rcv_clock_offset=self.header.rcv_clock_offset,
                     )
                     self.rinex_epochs.append(rinex_epoch)
 
             logger.debug("Successfully read data")
-            
+
 
 class Rinex3ObsReader(RinexObsReader):
     """RINEX 3 observation reader with optimized parsing.
-
     Args:
-        datadict: {
-            "epochs": [
-                {
-                    "id": "YYYY-mm-ddTHH:MM:SSZ",
-                    "satellites": [
-                        {
-                            "id": "[GR][0-9]{2},
-                            "observations": {
-                                "[CLSPD][1258][ACPQW]": {
-                                    "value": ..,
-                                    "lli": ..,
-                                    "ss": ..
-                                }
-                            }{1,}
-                        }
-                    ]
-                },
-                {
-                    "id": "..."
-                    "satellites": [..]
-                },
-                {..}
-            ]
-        }
     """
 
     RINEX_FORMAT = 3
@@ -681,26 +608,26 @@ class Rinex3ObsReader(RinexObsReader):
     RINEX_DATELINE_REGEXP_SHORT = cc.RINEX3_DATELINE_REGEXP
     RINEX_SATELLITES_REGEXP = cc.RINEX3_SATELLITES_REGEXP
     RINEX_FILE_NAME_REGEX = cc.RINEX3_FORMAT_FILE_NAME
-    
+
     # Cached compiled regex patterns for performance
     _dateline_re = None
     _data_obs_re = None
     _obs_field_re = None
-    
+
     @classmethod
     def _get_dateline_re(cls):
         """Get cached compiled dateline regex."""
         if cls._dateline_re is None:
             cls._dateline_re = re.compile(cls.RINEX_DATELINE_REGEXP)
         return cls._dateline_re
-    
+
     @classmethod
     def _get_data_obs_re(cls):
         """Get cached compiled data observation regex."""
         if cls._data_obs_re is None:
             cls._data_obs_re = re.compile(cc.RINEX3_DATA_OBSEVATION_REGEXP)
         return cls._data_obs_re
-    
+
     @classmethod
     def _get_obs_field_re(cls):
         """Get cached compiled observation field regex."""
@@ -712,12 +639,12 @@ class Rinex3ObsReader(RinexObsReader):
         """Initialize a RINEX 3 observation reader."""
         super().__init__(**kwargs)
 
-
     def set_rinex_obs_file(self, rinex_obs_file: str) -> None:
         self.rinex_obs_file = rinex_obs_file
 
         if not self.is_valid_filename(
-            os.path.basename(self.rinex_obs_file), self.header.format_version):
+            os.path.basename(self.rinex_obs_file), self.header.format_version
+        ):
             raise ValueError(
                 f"Invalid RINEX filename for version {self.header.format_version}: "
                 f"{os.path.basename(self.rinex_obs_file)}"
@@ -748,9 +675,8 @@ class Rinex3ObsReader(RinexObsReader):
         m = re.match(filename_regex, filename)
         return m is not None
 
-    def read_data_to_dict(self) -> None:
-        """
-        """
+    def read_epochs_from_file(self) -> None:
+        """ """
         with open(self.rinex_obs_file, "r") as handler:
             i = 0
             header_reached = False
@@ -781,15 +707,39 @@ class Rinex3ObsReader(RinexObsReader):
                     int(r.group("day")),
                     int(r.group("hour")),
                     int(r.group("minute")),
-                    int(float(r.group("second")))
+                    int(float(r.group("second"))),
+                    tzinfo=datetime.timezone.utc,
                 )
-
-                epoch_flag = r.group("epoch_flag")
-                if epoch_flag not in ["0", "1"]:
-                    logger.info("Special event: {}".format(epoch_flag))
 
                 # Number of Satellites
                 nos = int(r.group("num_of_sats"))
+                ts_epoch = timestamp.timestamp()
+                ts_seconds_of_day = ts_to_second_of_day(ts_epoch)
+
+                skip_epoch = False
+
+                if ts_epoch < self.crop_beg or ts_epoch > self.crop_end:
+                    # logger.debug("Skipping Epoch outside crop range")
+                    # Skip Epoch
+                    skip_epoch = True
+
+                if (
+                    self.interval_filter > 0
+                    and ts_seconds_of_day % self.interval_filter != 0
+                ):
+                    logger.debug("Skipping Epoch due to interval filter")
+                    # Skip Epoch
+                    skip_epoch = True
+
+                if skip_epoch:
+                    for _ in range(nos):
+                        sat_line = handler.readline()
+                        i += 1
+                    continue
+
+                epoch_flag = r.group("epoch_flag")
+                if epoch_flag not in ["0", "1"]:
+                    logger.info(f"Special event: {epoch_flag}")
 
                 satellites = []
                 for _ in range(nos):
@@ -802,10 +752,10 @@ class Rinex3ObsReader(RinexObsReader):
                         logger.debug("No Data")
 
                 rinex_epoch = RinexEpoch(
-                    timestamp=timestamp,
+                    timestamp=ts_epoch,
                     observation_types=self.header.sys_obs_types,
                     satellites=satellites,
-                    rcv_clock_offset=self.header.rcv_clock_offset
+                    rcv_clock_offset=self.header.rcv_clock_offset,
                 )
                 # if rinex_epoch.is_valid():
                 self.rinex_epochs.append(rinex_epoch)
@@ -814,25 +764,31 @@ class Rinex3ObsReader(RinexObsReader):
 
     def read_epoch_satellite(self, line: str) -> Satellite | None:
         """Parse satellite observation data from epoch line.
-        
+
         Args:
             line: Raw line containing satellite observations.
-            
+
         Returns:
             Dictionary with satellite number and Satellite object.
         """
-        sat_data = self._get_data_obs_re().search(line)
+        # sat_data = self._get_data_obs_re().search(line)
         # Get Observation Data
-        if sat_data is not None:
-            sat_num = sat_data.group("sat_num")
-            self.add_satellite(sat_num)
-            return self.read_satellite(sat_id=sat_num, line=line)
+        # if sat_data is not None:
+        #     sat_num = sat_data.group("sat_num")
+        #     self.add_satellite(sat_num)
+        #     return self.read_satellite(sat_id=sat_num, line=line)
+        sat_num = line[0:3]
+        if sat_num[0] in self.filter_sat_sys:
+            return None
+        if sat_num in self.filter_sat_pnr:
+            return None
+        return self.read_satellite(sat_id=sat_num, line=line)
         return None
 
     def read_satellite(self, sat_id: str, line: str) -> Satellite:
         """
         Parses trough rnx observation and creates Satellite object. Referring to the RINEX Handbook 3.03
-        
+
         Args:
             sat_id: str satellite number/name
             line: str rnx line containing observations
@@ -842,37 +798,79 @@ class Rinex3ObsReader(RinexObsReader):
         observations = []
         try:
             sat_sys = sat_id[0]
-            m = self._get_data_obs_re().match(line)
-    
-            if m:
-                ofp = self._get_obs_field_re()
-                obs_raw = [line[3+i*16:3+(i+1)*16] for i in range((len(line)-3) // 16)] + \
-                    [line[3+((len(line)-3)//16)*16:]]
-                for i, obs_field in enumerate(obs_raw):
-                    if i >= len(self.header.sys_obs_types[sat_sys]):
-                        break
-                    
-                    obs_code = self.header.sys_obs_types[sat_sys][i]
-                    obs_value = None
-                    obs_lli = None
-                    obs_ssi = 0
-                    
-                    r = ofp.match(obs_field)
-                    if r:
-                        rd = r.groupdict()
-                        obs_value = float(rd["value"])
-                        obs_ssi = 0 if not str(rd["ssi"]).isnumeric() else int(rd["ssi"])
-                        obs_lli = None if not str(rd["lli"]).isnumeric() else int(rd["lli"])
-                    
-                    if obs_value is not None:
-                        observations.append(Observation(
-                            code=obs_code,
-                            value=obs_value,
-                            lli=obs_lli,
-                            ss=obs_ssi
-                        ))
+            # sat_buf = StringIO(line)
+            # sat_buf.seek(4)  # Skip sat_id and space
+            pos = 3
+
+            # C02                  40447116.254 6  40447115.653 6  40447111.189 6                                                 210618834.50006 171145027.13806 162863805.01406                                                        39.634          36.620          39.637
+
+            for obs_type in self.header.sys_obs_types.get(sat_sys, []):
+                filter_obs_type = f"{sat_sys}{obs_type[1:]}"
+                if filter_obs_type in self.filter_sat_obs:
+                    # Skip unwanted observation type
+                    pos += 16
+                    continue
+                obs_val, obs_lli, obs_ssi = None, " ", " "
+                try:
+                    raw_val = line[pos : pos + 14]
+                    pos += 14
+                    raw_lli = line[pos : pos + 1]
+                    pos += 1
+                    raw_ssi = line[pos : pos + 1]
+                    pos += 1  # Skip space
+                    # raw_val = sat_buf.read(13).strip()
+                    # raw_lli = sat_buf.read(1).strip()
+                    # raw_ssi = sat_buf.read(1).strip()
+                    obs_val = raw_val  # if raw_val != "" else None
+                    obs_lli = " " if raw_lli == "\n" else raw_lli
+                    obs_ssi = " " if raw_ssi == "\n" else raw_ssi
+                    # sat_buf.read(1)  # Skip space
+                except Exception as e:
+                    logger.error(e)
+
+                if raw_val is not None:
+                    observations.append(
+                        Observation(
+                            code=obs_type, value=obs_val, lli=obs_lli, ss=obs_ssi
+                        )
+                    )
+
+            # m = self._get_data_obs_re().match(line)
+            # if True:
+            #     ofp = self._get_obs_field_re()
+            #     obs_raw = [
+            #         line[3 + i * 16 : 3 + (i + 1) * 16]
+            #         for i in range((len(line) - 3) // 16)
+            #     ] + [line[3 + ((len(line) - 3) // 16) * 16 :]]
+
+            #     for i, obs_field in enumerate(obs_raw):
+            #         if i >= len(self.header.sys_obs_types[sat_sys]):
+            #             break
+
+            #         obs_code = self.header.sys_obs_types[sat_sys][i]
+            #         obs_value = None
+            #         obs_lli = None
+            #         obs_ssi = 0
+
+            #         r = ofp.match(obs_field)
+            #         if r:
+            #             rd = r.groupdict()
+            #             obs_value = float(rd["value"])
+            #             obs_ssi = (
+            #                 0 if not str(rd["ssi"]).isnumeric() else int(rd["ssi"])
+            #             )
+            #             obs_lli = (
+            #                 None if not str(rd["lli"]).isnumeric() else int(rd["lli"])
+            #             )
+
+            #         if obs_value is not None:
+            #             observations.append(
+            #                 Observation(
+            #                     code=obs_code, value=obs_value, lli=obs_lli, ss=obs_ssi
+            #                 )
+            #             )
         except Exception as e:
             traceback.print_exc()
-            raise(e)
-        
+            raise (e)
+
         return Satellite(sat_id, observations)
