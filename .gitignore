@@ -148,7 +148,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-<<<<<<< HEAD
 
 # pytype static type analyzer
 .pytype/
@@ -166,3 +165,6 @@ data/*
 .vscode
 tests
 _archive
+
+NSDL00AUT*
+.context
