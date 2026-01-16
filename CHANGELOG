@@ -90,3 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 1.2.1 - 2026-01-14
 - FIX: merging new features into develop
 - CHG: Improve processing time (heavily)
+
+## 1.2.2 - 2026-01-16
+- CHG: Updated README
+- ADD: merge files per station
+- ADD: filter rinex by sat sys, pnr, obs types
+- FIX: hatanaka compressions  complained about end of line

@@ -4,20 +4,31 @@
 import argparse
 import datetime
 import gzip
-import logging
 import os
 import sys
 import traceback
 import cProfile
 import pstats
+import threading
+import queue
+import logging
+import time
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple, Dict
 
 
 from rinex_parser.logger import logger
-from rinex_parser.obs_parser import RinexParser, EPOCH_MIN, EPOCH_MAX
+from rinex_parser.obs_parser import (
+    RinexParser,
+    RinexParserResult,
+    EPOCH_MIN,
+    EPOCH_MAX,
+)
 from rinex_parser.obs_quality import RinexQuality
+from rinex_parser.obs_epoch import RinexEpoch
+from rinex_parser.utils import handle_rx3_info
+from rinex_parser import __version__ as VERSION
 
 
 def detect_rinex_version(rinex_file: str) -> int:
@@ -126,6 +137,8 @@ def create_parser() -> argparse.ArgumentParser:
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
 
+    parser.add_argument("--profile", action="store_true", help="Enable CPU profiling")
+
     parser.add_argument(
         "--show-output",
         action="store_true",
@@ -150,18 +163,43 @@ def create_parser() -> argparse.ArgumentParser:
         default="",
         help="Remove satellites (G01,R04,E12,...)",
     )
+
     parser.add_argument(
         "--filter-sat-sys",
         type=str,
         default="",
         help="Remove satellite system (G,I,S) from epoch.",
     )
+
     parser.add_argument(
         "--filter-sat-obs",
         type=str,
         default="",
         help="Remove observation type (G1C,R1C,E8I,C6Q).",
     )
+    parser.add_argument(
+        "-t",
+        "--skeleton",
+        type=str,
+        default="",
+        help="Path to skeleton file to edit header",
+    )
+
+    parser.add_argument(
+        "-m",
+        "--merge",
+        action="store_true",
+        help="Merge multiple RINEX files",
+    )
+
+    parser.add_argument(
+        "-n", "--threads", type=int, default=1, help="Number of threads to use"
+    )
+
+    parser.add_argument(
+        "--version", action="version", version=f"RinexParser v{VERSION}"
+    )
+
     return parser
 
 
@@ -174,23 +212,58 @@ def process_resample(
     parser: RinexParser,
     output_file: Optional[str] = None,
     show_output: bool = False,
-) -> None:
+    skeleton_file: Optional[str] = None,
+) -> str:
     """Resample RINEX observations to specified interval."""
     logger.info(f"Resampling {parser.rinex_file} to {parser.sampling}s interval")
 
     try:
-        logger.info("Creating data dictionary.")
+        logger.debug(f"Creating data dictionary {output_file}.")
         parser.do_create_datadict()
         # parser.rinex_reader.do_thinning(interval)
 
         # Write output
-        logger.info("Preparing output filename.")
-        country = parser.get_country_from_filename()
-        out_dir = os.path.dirname(parser.rinex_file)
-        out_fil = parser.get_rx3_long(country=country)
+        logger.debug(f"Preparing output filename {output_file}.")
 
-        if output_file is None or output_file == "" or output_file == "::RX3::":
-            pass
+        country_file_in = parser.get_country_from_filename()
+        country_file_out = "XXX"
+
+        # Apply skeleton if provided
+        if skeleton_file:
+            parser.rinex_reader.header.apply_skeleton(skeleton_file)
+
+        if output_file:
+            country_file_out = parser.rinex_reader.header.get_country_from_filename(
+                output_file
+            )
+            parser.rinex_reader.header.marker_name = (
+                parser.rinex_reader.header.get_marker_name_from_filename(output_file)
+            )
+
+        # Determine country with priority: file_in > skeleton > file_out > XXX
+        parser.rinex_reader.header.country = (
+            parser.rinex_reader.header.determine_country(
+                country_file_in, country_file_out
+            )
+        )
+
+        out_dir = os.path.dirname(parser.rinex_file)
+
+        if output_file is None or output_file == "":
+            out_fil = parser.get_rx3_long(country=parser.rinex_reader.header.country)
+
+        # get info from rx3 indicator '::RX3-cAUT-sGRAZ::
+        elif output_file.startswith("::RX3"):
+            rx3_info = handle_rx3_info(output_file)
+            if rx3_info.country:
+                parser.rinex_reader.header.country = rx3_info.country
+            if rx3_info.marker_name:
+                parser.rinex_reader.header.marker_name = rx3_info.marker_name
+            if rx3_info.receiver_id:
+                parser.rinex_reader.header.receiver_id = rx3_info.receiver_id
+            if rx3_info.monument_id:
+                parser.rinex_reader.header.monument_id = rx3_info.monument_id
+            out_fil = parser.get_rx3_long(country=parser.rinex_reader.header.country)
         else:
             out_fil = os.path.basename(output_file)
             out_dir = os.path.dirname(output_file)
@@ -211,6 +284,8 @@ def process_resample(
     except Exception as e:
         logger.error(f"Error resampling {parser.rinex_file}: {e}")
         raise
+
+    return output_file
 
 
 def process_rinstat(
@@ -251,9 +326,13 @@ def process_rinstat(
         logger.error(f"Error generating RINSTAT for {parser.rinex_file}: {e}")
         raise
 
+    return output_file
 
-def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> None:
+
+def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> RinexParserResult:
     """Process a single RINEX file based on CLI arguments."""
+
+    output_file = args.output
     try:
         if not os.path.exists(rinex_file):
             logger.error(f"File not found: {rinex_file}")
@@ -270,7 +349,7 @@ def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> None:
             "sampling": args.resample if args.resample else 0,
             "crop_beg": crop_start,
             "crop_end": crop_end,
-            # "skeleton": args.skeleton,
+            "skeleton": args.skeleton,
             "filter_sat_sys": args.filter_sat_sys,
             "filter_sat_pnr": args.filter_sat_pnr,
             "filter_sat_obs": args.filter_sat_obs,
@@ -289,13 +368,14 @@ def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> None:
         )
 
         if args.resample >= 0:
-            process_resample(
+            output_file = process_resample(
                 parser,
                 output_file=args.output,
                 show_output=args.show_output,
+                skeleton_file=args.skeleton,
             )
         elif args.rinstat or args.rinstat_json:
-            process_rinstat(
+            output_file = process_rinstat(
                 parser,
                 output_file=args.output,
                 show_output=args.show_output,
@@ -305,12 +385,38 @@ def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> None:
             logger.error(
                 "Please specify an operation (--resample, --rinstat, or --rinstat-json)"
             )
-            return 1
+            return RinexParserResult(None, None)
     except Exception as e:
         logger.error(f"Error processing {rinex_file}: {e}")
         raise
 
-    return 0
+    return RinexParserResult(output_file, parser)
+
+
+LIST_LOCK = threading.Lock()
+
+
+def run_thread(
+    queue: queue.Queue,
+    namespace: argparse.Namespace,
+    path_list: List[Tuple[str, RinexParser]],
+):
+    while not queue.empty():
+        try:
+            path = queue.get()
+            logger.debug(f"Process {path}")
+            with LIST_LOCK:
+                path_list.append(
+                    process_rinex_file(
+                        rinex_file=path,
+                        args=namespace,
+                    )
+                )
+                logger.debug(f"Appended {path_list[-1].rinex_file}")
+            queue.task_done()
+        except Exception as e:
+            logger.error(f"Error in thread processing {path}: {e}")
+            traceback.print_exc()
 
 
 def main() -> int:
@@ -318,28 +424,142 @@ def main() -> int:
     args = parse_arguments()
 
     # Setup logging
-    if args.verbose:
-        # logging.getLogger("rinex_parser").setLevel(logging.DEBUG)
-        # logger.setLevel(logging.DEBUG)
+    if args.profile:
         # start profiling
         profiler = cProfile.Profile()
         profiler.enable()
 
+    if args.verbose:
+        for handler in logger.handlers:
+            handler.setLevel(logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
+
+    parse_queue = queue.Queue()
+    parse_threads: List[threading.Thread] = []
+
+    parsed_files: List[RinexParserResult] = []
+    grouped_files: Dict[str, List[RinexParserResult]] = {}
+    paths = [f for f in args.rinex_files]
+
+    kwargs = {}
+
     try:
-        for rinex_file in args.rinex_files:
-            return process_rinex_file(rinex_file, args)
-        return 0
+
+        # Fill Queue with tasks
+        for path in paths:
+            assert os.path.exists(path)
+            logger.debug(f"Queuing {path}")
+            parse_queue.put(path)
+
+        for _ in range(args.threads):
+            t = threading.Thread(
+                target=run_thread, args=(parse_queue, args, parsed_files)
+            )
+            parse_threads.append(t)
+            t.start()
+
+        while not parse_queue.empty():
+            time.sleep(0.01)
+
+        for t in parse_threads:
+            t.join()
+        logger.debug(f"Finished processing input file(s)")
+
+        if args.merge:
+            logger.info("Merging processed RINEX files")
+
+            for item in parsed_files:
+                if item.rinex_file is None or item.rinex_parser is None:
+                    continue
+
+                station = os.path.basename(item.rinex_file)[:4].upper().ljust(4, "X")
+                if station not in grouped_files:
+                    grouped_files[station] = []
+                grouped_files[station].append(item)
+
+            # merge each station's files
+            for station in grouped_files.keys():
+                groupd_files_len = len(grouped_files[station])
+                if groupd_files_len <= 0:
+                    logger.info(f"No files to merge for station {station}")
+                    continue
+                elif groupd_files_len == 1:
+                    logger.info(f"Only one file for station {station}, skipping merge")
+                    continue
+                else:
+                    logger.info(
+                        f"Merging station {station} with {groupd_files_len} files"
+                    )
+                    # sort files by start time
+                    result_list: List[RinexParserResult] = sorted(
+                        list(grouped_files[station]),
+                        key=lambda x: x.rinex_parser.rinex_reader.header.first_observation,
+                    )
+                    for rinex_result in result_list:
+                        logger.info(f" - {rinex_result.rinex_file}")
+
+                    result_list[0].rinex_parser.rinex_reader.update_header_obs()
+                    result_list[0].rinex_parser.rinex_reader.header.last_observation = (
+                        result_list[
+                            -1
+                        ].rinex_parser.rinex_reader.header.last_observation
+                    )
+
+                    output_dir = os.path.dirname(result_list[0].rinex_file)
+                    output_file = "MERGED.rnx"
+                    output_file = result_list[0].rinex_parser.get_rx3_long(
+                        country=result_list[0].rinex_parser.rinex_reader.header.country,
+                        ts_source="header",
+                    )
+                    output_file = os.path.join(output_dir, output_file)
+
+                    logger.info(f"Writing merged RINEX to {output_file}.")
+
+                    with open(output_file, "w") as f:
+                        # write header from first file
+                        f.write(
+                            result_list[0].rinex_parser.rinex_reader.header.to_rinex3()
+                        )
+                        f.write("\n")
+                        # write epochs from all files
+                        for rinex_result in result_list:
+                            logger.debug(
+                                f"Processing RINEX 3 epochs ({rinex_result.rinex_file},{len(rinex_result.rinex_parser.rinex_epochs)} total)"
+                            )
+                            # TODO: check if header changes between files
+                            differ = result_list[
+                                0
+                            ].rinex_parser.rinex_reader.header.has_other_info(
+                                rinex_result.rinex_parser.rinex_reader.header
+                            )
+
+                            if differ:
+                                # TODO: write epoch flag to rinex file
+                                f.write(f">{'':30s}4 {len(differ)+1:2d}\n")
+                                for field in differ:
+                                    f.write(f"{field}\n")
+                                f.write(
+                                    f"{'  --> HEADER CHANGES DURING MERGE <--':60s}COMMENT\n"
+                                )
+
+                            # optimize epoch writing to avoid loading all epochs in memory
+                            for rinex_epoch in rinex_result.rinex_parser.rinex_epochs:
+                                f.write(rinex_epoch.to_rinex3())
+                                f.write("\n")
+
+                    logger.info(f"Merged output written to {output_file}.")
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
         return 130
+
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         traceback.print_exc()
         return 1
 
     finally:
-        if args.verbose:
+        if args.profile:
             # stop profiling
             profiler.disable()
             # Print profiling results
@@ -347,6 +567,7 @@ def main() -> int:
             stats.sort_stats("cumulative")
             print("\n=== CPU Profiling Results ===")
             stats.print_stats(20)  # Top 20 functions
+        return 0
 
 
 if __name__ == "__main__":

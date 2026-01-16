@@ -14,21 +14,19 @@ Copyright (c) 2018, jiargei <juergen.fredriksson@bev.gv.at>
 import os
 import math
 import argparse
-import datetime
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from pathlib import Path
 
-from rinex_parser.constants import RNX_FORMAT_OBS_TIME
 from rinex_parser.logger import logger
 from rinex_parser.obs_factory import RinexObsFactory, RinexObsReader
 from rinex_parser.obs_epoch import (
-    ts_epoch_to_header,
     ts_to_datetime,
-    ts_epoch_to_time,
     EPOCH_MIN,
     EPOCH_MAX,
+    RinexEpoch,
 )
+from rinex_parser.utils import handle_rx3_info
 
 
 def run():
@@ -87,12 +85,12 @@ class RinexParser:
             raise ValueError(f"Unknown RINEX version {rinex_version} (must be 2 or 3)")
 
         self.rinex_version = rinex_version
-        self.rinex_file = rinex_file
         self.rinex_reader_factory = RinexObsFactory()
         self.rinex_reader: RinexObsReader = None
         self.filter_on_read: bool = kwargs.get("filter_on_read", True)
         self.sampling = sampling
         self.__create_reader(self.rinex_version)
+        self.rinex_reader.rinex_obs_file = rinex_file
         self.rinex_reader.interval_filter = self.sampling
         self.rinex_reader.filter_sat_sys = filter_sat_sys
         self.rinex_reader.filter_sat_pnr = filter_sat_pnr
@@ -101,19 +99,39 @@ class RinexParser:
         self.rinex_reader.crop_end = crop_end
 
     @property
+    def rinex_file(self):
+        return self.rinex_reader.rinex_obs_file
+
+    @property
+    def rinex_epochs(self) -> List[RinexEpoch]:
+        return self.rinex_reader.rinex_epochs
+
+    @property
     def datadict(self):
         return self.get_datadict()
 
-    def get_country_from_filename(self) -> str:
+    def get_country_from_filename(self, rinex_file: str = "") -> str:
         """
         Extract country code from the RINEX filename.
         Returns:
             str: Country code (3 characters) or "XXX" if not found.
         """
-        rinex_path = os.path.basename(self.rinex_file)
+        if rinex_file == "":
+            rinex_file = self.rinex_file
+        rinex_path = os.path.basename(rinex_file)
         country = "XXX"
+
+        # get info from rx3 indicator '::RX3-cAUT-sGRAZ::
+        if rinex_path.startswith("::RX3"):
+            rx3_info = handle_rx3_info(rinex_path)
+            if rx3_info.country:
+                return rx3_info.country
+
+        # get country from rinex 3 long filename
         if len(rinex_path) > 32:
             country = rinex_path[6:9].upper().ljust(3, "X")
+            return country
+
         return country
 
     def get_period(self, ts_f: float, ts_l: float) -> Tuple[str, int]:
@@ -146,24 +164,31 @@ class RinexParser:
         period = f"{unitCount:02d}{unitPeriod}"
         return period, unitCount
 
-    def get_rx3_long(self, country: str = "XXX") -> str:
+    def get_rx3_long(self, country: str = "XXX", ts_source: str = "epoch") -> str:
         """
         Generate a long RINEX 3 filename based on the observation data.
         Args:
             country: Country code for the filename (default "XXX").
+            ts_source: Source of timestamp for filename ("epoch" or "header").
         Returns:
             str: Generated RINEX 3 filename.
         """
         code = self.rinex_reader.header.marker_name[:4].upper()
-        ts_f = self.rinex_reader.rinex_epochs[0].timestamp
-        ts_l = self.rinex_reader.rinex_epochs[-1].timestamp
+        if ts_source == "header":
+            ts_f = self.rinex_reader.header.first_observation
+            ts_l = self.rinex_reader.header.last_observation
+        else:
+            ts_f = self.rinex_reader.rinex_epochs[0].timestamp
+            ts_l = self.rinex_reader.rinex_epochs[-1].timestamp
         period, _ = self.get_period(ts_f, ts_l)
         dtF = ts_to_datetime(ts_f)
         doy = int(dtF.strftime("%03j"))
         rinex_origin = "S"
         rinex_path = os.path.basename(self.rinex_file)
-        monument_id = "0"
-        receiver_id = "0"
+        monument_id = self.rinex_reader.header.monument_id or "0"
+        receiver_id = self.rinex_reader.header.receiver_id or "0"
+
+        country = self.rinex_reader.header.get_country_from_filename(self.rinex_file)
 
         if len(rinex_path) > 32:
             # get data origin
@@ -288,44 +313,53 @@ class RinexParser:
             cleared_epochs.append(epoch)
 
         self.rinex_reader.rinex_epochs = cleared_epochs
-        self.rinex_reader.header.first_observation = ts_to_datetime(
-            self.rinex_reader.rinex_epochs[0].timestamp
-        )
-        self.rinex_reader.header.last_observation = ts_to_datetime(
-            self.rinex_reader.rinex_epochs[-1].timestamp
-        )
+        self.rinex_reader.header.first_observation = self.rinex_reader.rinex_epochs[
+            0
+        ].timestamp
+        self.rinex_reader.header.last_observation = self.rinex_reader.rinex_epochs[
+            -1
+        ].timestamp
 
-    def to_rinex3(self, country: str = "XXX", use_raw: bool = False):
+    # def to_rinex3(self, country: str = "XXX", use_raw: bool = False):
 
-        self.rinex_reader.header.first_observation = ts_to_datetime(
-            self.rinex_reader.rinex_epochs[0].timestamp
-        )
-        self.rinex_reader.header.last_observation = ts_to_datetime(
-            self.rinex_reader.rinex_epochs[-1].timestamp
-        )
-        out_file = os.path.join(
-            os.path.dirname(self.rinex_file), self.get_rx3_long(country)
-        )
+    #     self.rinex_reader.header.first_observation = ts_to_datetime(
+    #         self.rinex_reader.rinex_epochs[0].timestamp
+    #     )
+    #     self.rinex_reader.header.last_observation = ts_to_datetime(
+    #         self.rinex_reader.rinex_epochs[-1].timestamp
+    #     )
+    #     out_file = os.path.join(
+    #         os.path.dirname(self.rinex_file), self.get_rx3_long(country)
+    #     )
 
-        # make sure parser and header have the same obs types:
-        for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
-            if set(self.rinex_reader.header.sys_obs_types[sat_sys]) != set(
-                self.rinex_reader.found_obs_types[sat_sys]
-            ):
-                logger.warning("OBS Type missmatch!")
+    #     # make sure parser and header have the same obs types:
+    #     for sat_sys in self.rinex_reader.header.sys_obs_types.keys():
+    #         if set(self.rinex_reader.header.sys_obs_types[sat_sys]) != set(
+    #             self.rinex_reader.found_obs_types[sat_sys]
+    #         ):
+    #             logger.warning("OBS Type missmatch!")
 
-        # Output Rinex File
-        logger.debug(f"Append Header")
-        outlines = ["\n".join(self.rinex_reader.header.to_rinex3())]
-        outlines += ["\n"]
-        logger.debug(f"Append Epochs")
-        outlines += self.rinex_reader.to_rinex3(
-            use_raw=use_raw,
-            sys_obs_types=self.rinex_reader.header.sys_obs_types,
-            sys_order=self.rinex_reader.header.sys_obs_types.keys(),
-        )
-        # outlines += ["\n"]
-        logger.debug(f"Start writing to file {out_file}.")
-        with open(out_file, "w") as rnx:
-            rnx.writelines(outlines)
-        logger.info(f"Done writing to file {out_file}.")
+    #     # Output Rinex File
+    #     logger.debug(f"Append Header")
+    #     outlines = ["\n".join(self.rinex_reader.header.to_rinex3())]
+    #     outlines += ["\n"]
+    #     logger.debug(f"Append Epochs")
+    #     outlines += self.rinex_reader.to_rinex3(
+    #         use_raw=use_raw,
+    #         sys_obs_types=self.rinex_reader.header.sys_obs_types,
+    #         sys_order=self.rinex_reader.header.sys_obs_types.keys(),
+    #     )
+    #     # outlines += ["\n"]
+    #     logger.debug(f"Start writing to file {out_file}.")
+    #     with open(out_file, "w") as rnx:
+    #         rnx.writelines(outlines)
+    #     logger.info(f"Done writing to file {out_file}.")
+
+
+class RinexParserResult:
+
+    __slots__ = ("rinex_file", "rinex_parser")
+
+    def __init__(self, rinex_file: str, rinex_parser: RinexParser):
+        self.rinex_file = rinex_file
+        self.rinex_parser = rinex_parser

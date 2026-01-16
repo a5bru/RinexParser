@@ -41,6 +41,32 @@ rxp --resample 30 *.rnx --show-output
 
 Output: `station_resample.rnx`
 
+### Output filename formats
+
+Use special output format specifiers to automatically generate filenames:
+
+```bash
+# Standard RINEX 3 long name format
+rxp --resample 30 -o "::RX3::" station.rnx
+
+# With country code (Austria)
+rxp --resample 30 -o "::RX3-cAUT::" station.rnx
+
+# Full format with country and station name (when implemented)
+rxp --resample 30 -o "::RX3-cAUT-sGRAZ::" station.rnx
+```
+
+The output format specifiers work as follows:
+- `::RX3::` - Converts to RINEX 3 long name format (auto-extracts country from input filename if available)
+- `::RX3-cXXX::` - Converts to RINEX 3 long name with specified country code (e.g., `cAUT` for Austria, `cDEU` for Germany)
+- `::RX3-cXXX-sSTATION::` - RINEX 3 long name with country and station name (not yet implemented)
+
+When not using special format specifiers, provide a standard output filename:
+
+```bash
+rxp --resample 30 -o output.rnx station.rnx
+```
+
 ### Generate Quality Statistics
 
 Create rinstat reports:
@@ -58,33 +84,150 @@ rxp --rinstat-json station.rnx
 rxp --rinstat *.rnx.gz
 ```
 
-### Options
+### Crop observations by time window
 
-- `--version {2,3}`: Force RINEX version (auto-detected by default)
-- `--show-output`: Print results to stdout in addition to writing files
+Extract observations from a specific time period:
 
-## Data Structure
+```bash
+# Crop with ISO format timestamps
+rxp --crop-start 2026-01-20T00:00:00 --crop-end 2026-01-21T00:00:00 --resample 30 station.rnx
 
-After parsing the data is stored in a dictionary with the following structure:
+# Date only (uses full day)
+rxp --crop-start 2026-01-20 --crop-end 2026-01-21 --resample 30 station.rnx
+```
 
-```python
-{
-    "epochs": [
-        {
-            "id": "YYYY-mm-ddTHH:MM:SSZ",
-            "satellites": [
-                {
-                    "id": "G01",
-                    "observations": {
-                        "C1P_value": ...,
-                        "C1P_lli": ...,
-                        "C1P_ssi": ...,
-                    }
-                }
-            ]            
-        }
-    ]
-}
+### Filter satellite observations
+
+Remove specific satellites or observation types:
+
+```bash
+# Remove specific satellites
+rxp --filter-sat-pnr G01,R04,E12 --resample 30 station.rnx
+
+# Remove entire satellite system (GPS, GLONASS, Galileo, etc.)
+rxp --filter-sat-sys G,R --resample 30 station.rnx
+
+# Remove observation types
+rxp --filter-sat-obs G1C,R1C --resample 30 station.rnx
+```
+
+### Update header fields using skeleton file
+
+Use a skeleton file to copy header information (marker, receiver, antenna, observer details) to processed files:
+
+```bash
+# Apply skeleton header
+rxp --skeleton skeleton.rnx --resample 30 station.rnx
+
+# Skeleton can also set country code
+rxp --skeleton skeleton.rnx -o output.rnx --resample 30 station.rnx
+```
+
+The skeleton file should contain valid RINEX header lines. Supported fields include:
+- `MARKER NAME` and `MARKER NUMBER`
+- `REC # / TYPE / VERS` (receiver info)
+- `ANT # / TYPE` (antenna info)
+- `APPROX POSITION XYZ` (station coordinates)
+- `ANTENNA: DELTA H/E/N` (antenna offsets)
+- `OBSERVER / AGENCY`
+- `COMMENT` (can include `CountryCode=XX` for automatic country detection)
+
+Example skeleton file:
+```
+     3.04           OBSERVATION DATA    G (GPS)             RINEX VERSION / TYPE
+My Marker Station                       MARKER NAME
+123456                                  MARKER NUMBER
+SWIFTNAV PiksiMulti                     REC # / TYPE / VERS
+TrimbleChoke_MC2000                     ANT # / TYPE
+ 3771234.1234  3456789.5678   5123456.9 APPROX POSITION XYZ
+        0.0000        0.0000        0.0000 ANTENNA: DELTA H/E/N
+Observer Name                           OBSERVER / AGENCY
+CountryCode=AUT                         COMMENT
+```
+
+### Merge Multiple RINEX Files
+
+Combine multiple RINEX files from the same station into a single continuous file:
+
+```bash
+# Merge multiple files (groups by 4-letter station code)
+rxp --merge *.rnx
+
+# Merge with resampling
+rxp --resample 30 --merge *.rnx
+
+# Merge multiple files with output format specifier
+rxp --resample 30 --merge -o "::RX3-cAUT::" *.rnx
+```
+
+The merge operation:
+- Groups files by the 4-letter station code (first 4 characters of filename)
+- Sorts files chronologically
+- Combines headers and epochs into a single continuous file
+- Logs header changes between merged files as comments
+
+### Parallel Processing
+
+Use multiple threads for faster batch processing:
+
+```bash
+# Process 4 files in parallel
+rxp --resample 30 --threads 4 *.rnx
+
+# Combine with merge for fast batch operations
+rxp --resample 30 --merge --threads 4 *.rnx
+```
+
+### Performance Profiling
+
+Enable CPU profiling to analyze performance:
+
+```bash
+# Run with CPU profiling enabled
+rxp --resample 30 --profile station.rnx
+
+# Profiling results showing top 20 functions by execution time
+```
+
+### Help reference
+
+The help of rxp shows the following output:
+
+```
+usage: rxp [-h] [--resample SECONDS] [--rinstat] [--rinstat-json] [-o FILE] [-v] [--show-output] [--crop-start DATETIME] [--crop-end DATETIME]
+           [--filter-sat-pnr FILTER_SAT_PNR] [--filter-sat-sys FILTER_SAT_SYS] [--filter-sat-obs FILTER_SAT_OBS] [-t SKELETON]
+           [-m] [-n THREADS] [--profile] [--version]
+           rinex_files [rinex_files ...]
+
+RINEX observation file parser and processor
+
+positional arguments:
+  rinex_files           RINEX observation file(s) to process
+
+options:
+  -h, --help            show this help message and exit
+  --resample SECONDS    Resample observations to specified interval (seconds)
+  --rinstat             Generate RINSTAT quality report
+  --rinstat-json        Generate RINSTAT quality report in JSON format
+  -o, --output FILE     Output filename (auto-generated if not specified)
+  -v, --verbose         Enable verbose logging
+  --show-output         Print the generated output to console
+  --crop-start DATETIME
+                        Start time for cropping (ISO format: YYYY-MM-DD[[T]HH:MM:SS], YYYY-DOY)
+  --crop-end DATETIME   End time for cropping (ISO format: YYYY-MM-DD[[T]HH:MM:SS], YYYY-DOY)
+  --filter-sat-pnr FILTER_SAT_PNR
+                        Remove satellites (G01,R04,E12,...)
+  --filter-sat-sys FILTER_SAT_SYS
+                        Remove satellite system (G,I,S) from epoch.
+  --filter-sat-obs FILTER_SAT_OBS
+                        Remove observation type (G1C,R1C,E8I,C6Q).
+  -t, --skeleton SKELETON
+                        Path to skeleton file to edit header
+  -m, --merge           Merge multiple RINEX files
+  -n, --threads THREADS
+                        Number of threads to use
+  --profile             Enable CPU profiling
+  --version             Show version and exit
 ```
 
 ## Python API
@@ -123,25 +266,8 @@ output = parser.rinex_reader.to_rinex3()
 print(output)
 ```
 
-There is an entry point that allows you to use it from the command line:
+There is an entry point that allows you to use it from the command line via the `rxp` command (see command-line usage above).
 
-```
-usage: ridah-main [-h] [--fout FOUT] [--smp SMP] [--country COUNTRY] [--rnx-version {2,3}] [--crop-beg CROP_BEG] [--crop-end CROP_END] [--skeleton SKELETON] finp
-
-positional arguments:
-  finp                 Path to input file
-
-options:
-  -h, --help           show this help message and exit
-  --fout FOUT          Path to output file
-  --smp SMP            Sampling Rate for output
-  --country COUNTRY    Country Flag to use
-  --rnx-version {2,3}  Output rinex version. Currently only 3
-  --crop-beg CROP_BEG  Crop Window Beg, Unix Timestamp
-  --crop-end CROP_END  Crop Window End, Unix Timestamp
-  --skeleton SKELETON  Path to skeleton to edit header
-  
-```
 
 # Notice
 

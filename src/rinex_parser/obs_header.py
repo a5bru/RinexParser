@@ -8,13 +8,28 @@ import abc
 import datetime
 import re
 import traceback
+import os
 from typing import Any, Dict, List, Optional
 
 from rinex_parser import constants as c
 from rinex_parser import __version__ as VERSION
+from rinex_parser.utils import handle_rx3_info
+from rinex_parser.obs_epoch import ts_to_datetime
 from rinex_parser.logger import logger
 
-APP_NAME = f"RiDaH v{VERSION}"
+APP_NAME = f"RiDaH-{VERSION}"
+
+SKEL_FIELDS = [
+    "MARKER NAME",
+    "MARKER NUMBER",
+    "MARKER TYPE",
+    "REC # / TYPE / VERS",
+    "ANT # / TYPE",
+    "APPROX POSITION XYZ",
+    "ANTENNA: DELTA H/E/N",
+    "OBSERVER / AGENCY",
+    "COMMENT",
+]
 
 
 class RinexObsHeader(abc.ABC):
@@ -37,6 +52,7 @@ class RinexObsHeader(abc.ABC):
         self.file_type: str = kwargs.get("file_type", "OBSERVATION DATA")
         self.satellite_system: str = kwargs.get("satellite_system", "M (MIXED)")
         self.satellites: Dict[str, int] = {}
+        self.program: str = kwargs.get("program", APP_NAME)
         self.run_by: str = kwargs.get("run_by", "ASBRU")
         self.run_date: str = kwargs.get(
             "run_date", datetime.datetime.now().strftime("%FT%H:%MZ")
@@ -61,12 +77,8 @@ class RinexObsHeader(abc.ABC):
         self.wavelength_fact: Optional[int] = kwargs.get("wavelength_fact")
         self.observation_types: List[str] = kwargs.get("observation_types", [])
         self.interval: Optional[int] = kwargs.get("interval")
-        self.first_observation: Optional[datetime.datetime] = kwargs.get(
-            "first_observation"
-        )
-        self.last_observation: Optional[datetime.datetime] = kwargs.get(
-            "last_observation"
-        )
+        self.first_observation: Optional[float] = kwargs.get("first_observation")
+        self.last_observation: Optional[float] = kwargs.get("last_observation")
         self.time_system: Optional[str] = kwargs.get("time_system")
         self.rcv_clock_offset: Optional[int] = kwargs.get("rcv_clock_offset")
         self.leap_seconds: Optional[int] = kwargs.get("leap_seconds")
@@ -74,19 +86,51 @@ class RinexObsHeader(abc.ABC):
         self.empty: str = ""
         self.sys_obs_types: Dict[str, Dict[str, Any]] = {}
         self.other_headers: List[str] = []
+        self.country: str = kwargs.get("country", "XXX")
+        self.receiver_id: int = kwargs.get("receiver_id", 0)
+        self.monument_id: int = kwargs.get("monument_id", 0)
 
     @property
-    def datadict(self) -> Dict[str, Any]:
+    def compare_fields(self) -> List[tuple[str, str]]:
         """Get header data as dictionary.
 
         Returns:
             dict: Dictionary with key header information.
         """
-        return {
-            "marker_name": self.marker_name,
-            "marker_number": self.marker_number,
-            "sys_obs_types": self.sys_obs_types,
-        }
+        return [
+            (
+                "marker_name",
+                f"{self.marker_name:60s}MARKER NAME",
+            ),
+            (
+                "marker_number",
+                f"{self.marker_number:60s}MARKER NUMBER",
+            ),
+            (
+                "marker_type",
+                f"{self.marker_type:60s}MARKER TYPE",
+            ),
+            (
+                "observer_agency",
+                f"{self.observer:20s}{self.agency:40s}OBSERVER / AGENCY",
+            ),
+            (
+                "approx_position",
+                f"{self.approx_position_x:14.4f}{self.approx_position_y:14.4f}{self.approx_position_z:14.4f}{self.empty:18s}APPROX POSITION XYZ",
+            ),
+            (
+                "receiver",
+                f"{self.receiver_number:20s}{self.receiver_type:20s}{self.receiver_version:20s}REC # / TYPE / VERS",
+            ),
+            (
+                "antenna",
+                f"{self.antenna_number:20s}{self.antenna_type:20s}{self.empty:20s}ANT # / TYPE",
+            ),
+            (
+                "antenna_delta",
+                f"{self.antenna_delta_height:14.4f}{self.antenna_delta_east:14.4f}{self.antenna_delta_north:14.4f}{self.empty:18s}ANTENNA: DELTA H/E/N",
+            ),
+        ]
 
     @classmethod
     def from_header(cls, header_string: str) -> Optional["RinexObsHeader"]:
@@ -136,6 +180,113 @@ class RinexObsHeader(abc.ABC):
             str: RINEX 3 formatted header.
         """
         raise NotImplementedError
+
+    def get_country_from_filename(self, rinex_file: str = "") -> str:
+        """Extract country code from RINEX filename.
+
+        Args:
+            rinex_file: Path to RINEX file.
+
+        Returns:
+            str: Country code (3 characters) or "XXX" if not found.
+        """
+        # This will be overridden by subclasses if needed
+        return "XXX"
+
+    def determine_country(
+        self, country_file_in: str = "", country_file_out: str = ""
+    ) -> str:
+        """Determine country code with priority: file_in > skeleton > file_out > XXX.
+
+        Args:
+            country_file_in: Country code extracted from input filename.
+            country_file_out: Country code extracted from output filename.
+
+        Returns:
+            str: Selected country code.
+        """
+        if country_file_in != "XXX":
+            return country_file_in
+        elif self.country != "XXX":
+            return self.country
+        elif country_file_out != "XXX":
+            return country_file_out
+        else:
+            return "XXX"
+
+    def apply_skeleton(self, skeleton_file: str) -> None:
+        """Apply skeleton header fields to the RinexObsHeader.
+
+        Args:
+            skeleton_file: Path to skeleton file
+        """
+        if not os.path.exists(skeleton_file):
+            return None
+
+        header_lines = []
+        with open(skeleton_file, "r") as skel:
+            for line in skel.readlines():
+                if line == "":
+                    break
+                # What rinex fields are relevant?
+                for field in list(SKEL_FIELDS):
+                    if field in line[60:]:
+                        header_lines.append(line)
+                        break
+        rnx_header = Rinex3ObsHeader.from_header("\n".join(header_lines))
+        self.marker_name = rnx_header.marker_name
+        self.marker_number = rnx_header.marker_number
+        self.approx_position_x = rnx_header.approx_position_x
+        self.approx_position_y = rnx_header.approx_position_y
+        self.approx_position_z = rnx_header.approx_position_z
+        self.receiver_number = rnx_header.receiver_number
+        self.receiver_type = rnx_header.receiver_type
+        self.receiver_version = rnx_header.receiver_version
+        self.antenna_number = rnx_header.antenna_number
+        self.antenna_type = rnx_header.antenna_type
+        self.antenna_delta_height = rnx_header.antenna_delta_height
+        self.antenna_delta_east = rnx_header.antenna_delta_east
+        self.antenna_delta_north = rnx_header.antenna_delta_north
+        self.observer = rnx_header.observer
+        self.agency = rnx_header.agency
+        if self.country == "" or self.country == "XXX":
+            for comment in rnx_header.comment.split("\n"):
+                if comment.startswith("CountryCode="):
+                    self.country = comment[12:15]
+
+    def get_marker_name_from_filename(self, rinex_file: str = "") -> str:
+        """
+        Extract station code from the RINEX filename.
+        Returns:
+            str: Station code (4 characters).
+        """
+        station = "XXXX"
+        if rinex_file == "":
+            return station
+
+        rinex_path = os.path.basename(rinex_file)
+        logger.info(f"Extracting Marker Name from output filename: {rinex_path}")
+
+        # get info from rx3 indicator '::RX3-cAUT-sGRAZ::
+        if rinex_path.startswith("::RX3"):
+            rx3_info = handle_rx3_info(rinex_path)
+            if rx3_info.marker_name:
+                logger.info(f"Set Marker Name to {rx3_info.marker_name} from RX3 info.")
+                return rx3_info.marker_name
+
+        # get station from rinex 3 long filename
+        if len(rinex_path) >= 32:
+            station = rinex_path[0:4].upper()
+            logger.info(f"Set Marker Name to {station} from RINEX3 filename.")
+            return station
+
+        # gets station from rinex 2 filename
+        if len(rinex_path) >= 7:
+            station = rinex_path[0:4].upper()
+            logger.info(f"Set Marker Name to {station} from RINEX2 filename.")
+            return station
+
+        return station
 
     def set_interval(self, line: str) -> None:
         """Parse and set observation interval from header line.
@@ -323,6 +474,26 @@ class RinexObsHeader(abc.ABC):
                 # parse remaining headers
                 self.other_headers.append(line)
 
+    def has_other_info(self, other: "RinexObsHeader") -> List[str]:
+        """Check if other header has additional info compared to self.
+
+        Args:
+            other: Another RinexObsHeader instance.
+        Returns:
+            list: List of header fields that differ (new values).
+        """
+        diff_fields = []
+        for key, value in other.compare_fields:
+            for key_self, value_self in self.compare_fields:
+                if key == key_self:
+                    if value != value_self:
+                        logger.info(
+                            f"Header field {key} differs: {value_self} != {value}"
+                        )
+                        diff_fields.append(value)
+                    break
+        return diff_fields
+
 
 class Rinex2ObsHeader(RinexObsHeader):
 
@@ -497,32 +668,30 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         if sot:
             rinex_header.append(sot)
 
-        rinex_header.append(f"{self.interval:10.3f}{' ':50s}INTERVAL")
+        rinex_header.append(f"{self.interval:10.3f}{'':50s}INTERVAL")
 
         if self.first_observation is not None:
+            ts_rnx = ts_to_datetime(self.first_observation).strftime(
+                c.RNX_FORMAT_OBS_TIME
+            )
             rinex_header.append(
-                "{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF FIRST OBS".format(
-                    time_of_obs=self.first_observation.strftime(c.RNX_FORMAT_OBS_TIME),
-                    empty="",
-                    time_system=self.time_system,
-                )
+                f"{ts_rnx:30s}{'':5s}{self.time_system:3s}{'':9s}TIME OF FIRST OBS"
             )
         if self.last_observation is not None:
+            ts_rnx = ts_to_datetime(self.last_observation).strftime(
+                c.RNX_FORMAT_OBS_TIME
+            )
             rinex_header.append(
-                "{time_of_obs:30s}{empty:5s}{time_system:3s}{empty:9s}TIME OF LAST OBS".format(
-                    time_of_obs=self.last_observation.strftime(c.RNX_FORMAT_OBS_TIME),
-                    empty="",
-                    time_system=self.time_system,
-                )
+                f"{ts_rnx:30s}{'':5s}{self.time_system:3s}{'':9s}TIME OF LAST OBS",
             )
         if self.rcv_clock_offset is not None:
             rinex_header.append(
-                "{:6d}{:54s}RCV CLOCK OFFS APPL".format(self.rcv_clock_offset, "")
+                f"{self.rcv_clock_offset:6d}{'':54s}RCV CLOCK OFFS APPL",
             )
 
         if self.total_satellites > 0:
             rinex_header.append(
-                "{:6d}{:54s}# OF SATELLITES".format(self.total_satellites, "")
+                f"{self.total_satellites:6d}{'':54s}# OF SATELLITES",
             )
 
         apc = self.get_antenna_phasecenter()

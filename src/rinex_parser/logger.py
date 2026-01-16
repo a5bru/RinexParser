@@ -7,7 +7,7 @@ Sets up a configured logger instance for use throughout the RINEX parser module.
 import logging
 
 
-def create_logger(name: str = "rinexparser", log_level=logging.INFO):
+def create_logger(name: str = "rxp", log_level=logging.INFO):
     """creating a logger."""
 
     # create logger
