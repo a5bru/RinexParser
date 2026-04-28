@@ -6,6 +6,7 @@ import datetime
 import gzip
 import glob
 import os
+import re
 import sys
 import traceback
 import cProfile
@@ -103,6 +104,50 @@ def parse_crop_timestamp(timestamp_str: str) -> Optional[float]:
         return None
 
 
+def parse_header_obs_timestamp(value) -> Optional[float]:
+    """Parse RINEX header observation time into epoch seconds (UTC)."""
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, datetime.datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.timestamp()
+
+    if isinstance(value, str):
+        parts = value.split()
+        if len(parts) < 6:
+            return None
+        try:
+            year = int(parts[0])
+            month = int(parts[1])
+            day = int(parts[2])
+            hour = int(parts[3])
+            minute = int(parts[4])
+            sec_float = float(parts[5])
+            second = int(sec_float)
+            microsecond = int((sec_float - second) * 1_000_000)
+            dt = datetime.datetime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                microsecond,
+                tzinfo=datetime.timezone.utc,
+            )
+            return dt.timestamp()
+        except Exception:
+            return None
+
+    return None
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -156,6 +201,22 @@ def create_parser() -> argparse.ArgumentParser:
         "--recursive",
         action="store_true",
         help="Recursively scan directories in convert-name mode",
+    )
+
+    parser.add_argument(
+        "--default-country",
+        type=str,
+        default="",
+        metavar="CCC",
+        help="Default 3-letter country code (fallback for XXX)",
+    )
+
+    parser.add_argument(
+        "--default-origin",
+        type=str,
+        default="",
+        metavar="O",
+        help="Default RINEX data origin character: R (recorded) or S (stream, default)",
     )
 
     parser.add_argument(
@@ -238,6 +299,88 @@ def create_parser() -> argparse.ArgumentParser:
 def parse_arguments() -> argparse.Namespace:
     parser = create_parser()
     return parser.parse_args()
+
+
+def normalize_country_code(value: str) -> Optional[str]:
+    if not value:
+        return None
+    code = value.strip().upper()
+    if len(code) != 3 or not code.isalpha():
+        return None
+    return code
+
+
+def read_country_from_dotenv(dotenv_path: str = ".env") -> Optional[str]:
+    if not os.path.isfile(dotenv_path):
+        return None
+
+    try:
+        with open(dotenv_path, "r") as handler:
+            for raw_line in handler:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() in {"RXP_DEFAULT_COUNTRY", "DEFAULT_COUNTRY"}:
+                    return normalize_country_code(value.strip().strip('"').strip("'"))
+    except Exception as e:
+        logger.debug(f"Could not read .env for default country: {e}")
+    return None
+
+
+def resolve_default_country(args: argparse.Namespace) -> Optional[str]:
+    cli_country = normalize_country_code(args.default_country)
+    if cli_country:
+        return cli_country
+
+    env_country = normalize_country_code(os.environ.get("RXP_DEFAULT_COUNTRY", ""))
+    if env_country:
+        return env_country
+
+    return read_country_from_dotenv()
+
+
+def normalize_origin(value: str) -> Optional[str]:
+    if not value:
+        return None
+    v = value.strip().upper()
+    if v not in ("R", "S"):
+        return None
+    return v
+
+
+def read_origin_from_dotenv(dotenv_path: str = ".env") -> Optional[str]:
+    if not os.path.isfile(dotenv_path):
+        return None
+
+    try:
+        with open(dotenv_path, "r") as handler:
+            for raw_line in handler:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() in {"RXP_DEFAULT_ORIGIN", "DEFAULT_ORIGIN"}:
+                    return normalize_origin(value.strip().strip('"').strip("'"))
+    except Exception as e:
+        logger.debug(f"Could not read .env for default origin: {e}")
+    return None
+
+
+def resolve_default_origin(args: argparse.Namespace) -> Optional[str]:
+    cli_origin = normalize_origin(args.default_origin)
+    if cli_origin:
+        return cli_origin
+
+    env_origin = normalize_origin(os.environ.get("RXP_DEFAULT_ORIGIN", ""))
+    if env_origin:
+        return env_origin
+
+    return read_origin_from_dotenv()
 
 
 def process_resample(
@@ -362,7 +505,15 @@ def process_rinstat(
 
 
 def is_supported_rinex_file(path: str) -> bool:
-    return path.lower().endswith(SUPPORTED_RINEX_EXTENSIONS)
+    lower_path = path.lower()
+    if lower_path.endswith(SUPPORTED_RINEX_EXTENSIONS):
+        return True
+
+    filename = os.path.basename(lower_path)
+    # Accept RINEX2-style short names:
+    # daily:  ssssdddt.yy{o|d}   (e.g. amst0580.26o)
+    # hourly: ssssddd[a-x].yy{o|d} (e.g. amst058a.26o)
+    return bool(re.match(r"^[a-z0-9]{4}\d{3}[0a-x]\.\d{2}[od](\.gz)?$", filename))
 
 
 def _expand_file_or_dir(path: str, recursive: bool) -> List[str]:
@@ -422,7 +573,12 @@ def collect_convert_name_candidates(args: argparse.Namespace) -> List[str]:
     return filtered
 
 
-def convert_single_rinex_name(rinex_file: str, apply: bool = False) -> Dict[str, str]:
+def convert_single_rinex_name(
+    rinex_file: str,
+    apply: bool = False,
+    default_country: Optional[str] = None,
+    default_origin: Optional[str] = None,
+) -> Dict[str, str]:
     """Convert one RINEX v3 file path to a RINEX 3 long filename.
 
     Returns a status dict with source/target/status/message fields.
@@ -452,8 +608,41 @@ def convert_single_rinex_name(rinex_file: str, apply: bool = False) -> Dict[str,
             return result
 
         parser = RinexParser(rinex_file=rinex_file, rinex_version=rinex_version)
-        parser.do_create_datadict()
-        out_name = parser.get_rx3_long(country=parser.rinex_reader.header.country)
+        parser.rinex_reader.rinex_obs_file = rinex_file
+        parser.rinex_reader.read_header_from_file()
+        if default_country:
+            parser.rinex_reader.header.country = default_country
+
+        ts_source = "header"
+        header = parser.rinex_reader.header
+        first_obs_ts = parse_header_obs_timestamp(header.first_observation)
+        last_obs_ts = parse_header_obs_timestamp(header.last_observation)
+        if first_obs_ts is None or last_obs_ts is None:
+            ts_source = "epoch"
+            try:
+                parser.do_create_datadict()
+            except ValueError as err:
+                # Convert-name supports v3-content files with legacy/non-compliant names.
+                if "Invalid RINEX filename" not in str(err):
+                    raise
+                logger.warning(
+                    "Bypassing strict filename validation for convert-name: %s",
+                    rinex_file,
+                )
+                parser.rinex_reader.rinex_obs_file = rinex_file
+                parser.rinex_reader.read_header_from_file()
+                parser.rinex_reader.read_epochs_from_file()
+                if default_country:
+                    parser.rinex_reader.header.country = default_country
+        else:
+            header.first_observation = first_obs_ts
+            header.last_observation = last_obs_ts
+
+        out_name = parser.get_rx3_long(
+            country=parser.rinex_reader.header.country,
+            ts_source=ts_source,
+            origin=default_origin,
+        )
         if rinex_file.lower().endswith(".gz"):
             out_name = f"{out_name}.gz"
 
@@ -492,15 +681,34 @@ def process_convert_name(args: argparse.Namespace) -> int:
         logger.error("No candidate files found for conversion")
         return 1
 
+    default_country = resolve_default_country(args)
+    if args.default_country and not default_country:
+        logger.error("Invalid --default-country value (must be 3 letters)")
+        return 1
+
+    default_origin = resolve_default_origin(args)
+    if args.default_origin and not default_origin:
+        logger.error("Invalid --default-origin value (must be R or S)")
+        return 1
+
     logger.info(
         "Running convert-name in %s mode for %d file(s)",
         "apply" if args.apply else "dry-run",
         len(candidates),
     )
+    if default_country:
+        logger.info(f"Using default country fallback: {default_country}")
+    if default_origin:
+        logger.info(f"Using default origin: {default_origin}")
 
     failures = 0
     for candidate in candidates:
-        conversion = convert_single_rinex_name(candidate, apply=args.apply)
+        conversion = convert_single_rinex_name(
+            candidate,
+            apply=args.apply,
+            default_country=default_country,
+            default_origin=default_origin,
+        )
         source = conversion["source"]
         target = conversion["target"] or "-"
         status = conversion["status"]

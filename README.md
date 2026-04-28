@@ -104,6 +104,9 @@ rxp --convert-name --input-dir ./rinex --recursive
 
 # Mixed input: explicit files plus directories
 rxp --convert-name --input-dir ./rinex station1.rnx station2.obs.gz
+
+# Set default country fallback via CLI
+rxp --convert-name --default-country AUT amst058e.26o
 ```
 
 Behavior summary:
@@ -111,6 +114,11 @@ Behavior summary:
 - Content-version 2 files are skipped with status output.
 - Already compliant names are reported as no-op.
 - Name collisions are skipped for safety.
+
+Default country fallback precedence:
+- `--default-country CCC` (highest priority)
+- `RXP_DEFAULT_COUNTRY=CCC` environment variable
+- `.env` entry: `RXP_DEFAULT_COUNTRY=CCC` (or `DEFAULT_COUNTRY=CCC`)
 
 ### Crop observations by time window
 
