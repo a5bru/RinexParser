@@ -4,6 +4,7 @@
 import argparse
 import datetime
 import gzip
+import glob
 import os
 import sys
 import traceback
@@ -29,6 +30,9 @@ from rinex_parser.obs_quality import RinexQuality
 from rinex_parser.obs_epoch import RinexEpoch
 from rinex_parser.utils import handle_rx3_info
 from rinex_parser import __version__ as VERSION
+
+
+SUPPORTED_RINEX_EXTENSIONS = (".rnx", ".obs", ".o", ".gz")
 
 
 def detect_rinex_version(rinex_file: str) -> int:
@@ -106,24 +110,52 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "rinex_files", nargs="+", help="RINEX observation file(s) to process"
+        "rinex_files", nargs="*", help="RINEX observation file(s) to process"
     )
 
-    parser.add_argument(
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+
+    mode_group.add_argument(
         "--resample",
         type=int,
         metavar="SECONDS",
         help="Resample observations to specified interval (seconds)",
     )
 
-    parser.add_argument(
+    mode_group.add_argument(
         "--rinstat", action="store_true", help="Generate RINSTAT quality report"
     )
 
-    parser.add_argument(
+    mode_group.add_argument(
         "--rinstat-json",
         action="store_true",
         help="Generate RINSTAT quality report in JSON format",
+    )
+
+    mode_group.add_argument(
+        "--convert-name",
+        action="store_true",
+        help="Convert RINEX v3 files to compliant RINEX 3 long filenames",
+    )
+
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply filename conversion on disk (default is dry-run)",
+    )
+
+    parser.add_argument(
+        "--input-dir",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="Directory to scan for RINEX files in convert-name mode (repeatable)",
+    )
+
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Recursively scan directories in convert-name mode",
     )
 
     parser.add_argument(
@@ -329,6 +361,157 @@ def process_rinstat(
     return output_file
 
 
+def is_supported_rinex_file(path: str) -> bool:
+    return path.lower().endswith(SUPPORTED_RINEX_EXTENSIONS)
+
+
+def _expand_file_or_dir(path: str, recursive: bool) -> List[str]:
+    """Expand a single path token to candidate files.
+
+    Supports plain files/directories and glob patterns.
+    """
+    matches: List[str] = []
+    has_glob = any(token in path for token in ["*", "?", "["])
+
+    if has_glob:
+        for candidate in glob.glob(path, recursive=recursive):
+            if os.path.isfile(candidate):
+                matches.append(candidate)
+            elif os.path.isdir(candidate):
+                pattern = "**/*" if recursive else "*"
+                for item in glob.glob(os.path.join(candidate, pattern), recursive=recursive):
+                    if os.path.isfile(item):
+                        matches.append(item)
+        return matches
+
+    if os.path.isfile(path):
+        return [path]
+
+    if os.path.isdir(path):
+        pattern = "**/*" if recursive else "*"
+        for item in glob.glob(os.path.join(path, pattern), recursive=recursive):
+            if os.path.isfile(item):
+                matches.append(item)
+        return matches
+
+    return []
+
+
+def collect_convert_name_candidates(args: argparse.Namespace) -> List[str]:
+    """Collect conversion candidates from files and optional input directories."""
+    paths = list(args.rinex_files) + list(args.input_dir)
+    found_paths: List[str] = []
+    for path in paths:
+        expanded = _expand_file_or_dir(path, recursive=args.recursive)
+        if not expanded:
+            logger.warning(f"Input path does not exist or has no matches: {path}")
+            continue
+        found_paths.extend(expanded)
+
+    filtered: List[str] = []
+    seen = set()
+    for path in found_paths:
+        abs_path = os.path.abspath(path)
+        if abs_path in seen:
+            continue
+        seen.add(abs_path)
+        if is_supported_rinex_file(abs_path):
+            filtered.append(abs_path)
+        else:
+            logger.debug(f"Skip unsupported extension: {abs_path}")
+    return filtered
+
+
+def convert_single_rinex_name(rinex_file: str, apply: bool = False) -> Dict[str, str]:
+    """Convert one RINEX v3 file path to a RINEX 3 long filename.
+
+    Returns a status dict with source/target/status/message fields.
+    """
+    result = {
+        "source": os.path.abspath(rinex_file),
+        "target": "",
+        "status": "error",
+        "message": "",
+    }
+
+    if not os.path.exists(rinex_file):
+        result["status"] = "missing"
+        result["message"] = "Input file not found"
+        return result
+
+    if not os.path.isfile(rinex_file):
+        result["status"] = "skip"
+        result["message"] = "Input path is not a file"
+        return result
+
+    try:
+        rinex_version = detect_rinex_version(rinex_file)
+        if rinex_version != 3:
+            result["status"] = "skip-v2"
+            result["message"] = f"Detected RINEX version {rinex_version}; only v3 conversion is supported"
+            return result
+
+        parser = RinexParser(rinex_file=rinex_file, rinex_version=rinex_version)
+        parser.do_create_datadict()
+        out_name = parser.get_rx3_long(country=parser.rinex_reader.header.country)
+        if rinex_file.lower().endswith(".gz"):
+            out_name = f"{out_name}.gz"
+
+        target_path = os.path.join(os.path.dirname(os.path.abspath(rinex_file)), out_name)
+        result["target"] = target_path
+
+        if os.path.abspath(rinex_file) == os.path.abspath(target_path):
+            result["status"] = "noop"
+            result["message"] = "Filename already RINEX 3 compliant"
+            return result
+
+        if os.path.exists(target_path):
+            result["status"] = "collision"
+            result["message"] = "Target path already exists"
+            return result
+
+        if not apply:
+            result["status"] = "dry-run"
+            result["message"] = "Proposed rename"
+            return result
+
+        os.rename(rinex_file, target_path)
+        result["status"] = "renamed"
+        result["message"] = "Rename applied"
+        return result
+    except Exception as e:
+        result["status"] = "error"
+        result["message"] = str(e)
+        return result
+
+
+def process_convert_name(args: argparse.Namespace) -> int:
+    """Run convert-name endpoint in dry-run (default) or apply mode."""
+    candidates = collect_convert_name_candidates(args)
+    if not candidates:
+        logger.error("No candidate files found for conversion")
+        return 1
+
+    logger.info(
+        "Running convert-name in %s mode for %d file(s)",
+        "apply" if args.apply else "dry-run",
+        len(candidates),
+    )
+
+    failures = 0
+    for candidate in candidates:
+        conversion = convert_single_rinex_name(candidate, apply=args.apply)
+        source = conversion["source"]
+        target = conversion["target"] or "-"
+        status = conversion["status"]
+        message = conversion["message"]
+        print(f"CONVERT_NAME\t{status}\t{source}\t{target}\t{message}")
+        if status in {"error", "collision", "missing"}:
+            failures += 1
+
+    return 1 if failures > 0 else 0
+
+
 def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> RinexParserResult:
     """Process a single RINEX file based on CLI arguments."""
 
@@ -367,7 +550,7 @@ def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> RinexParser
             filter_sat_sys=kwargs.get("filter_sat_sys", ""),
         )
 
-        if args.resample >= 0:
+        if args.resample is not None and args.resample >= 0:
             output_file = process_resample(
                 parser,
                 output_file=args.output,
@@ -383,7 +566,7 @@ def process_rinex_file(rinex_file: str, args: argparse.Namespace) -> RinexParser
             )
         else:
             logger.error(
-                "Please specify an operation (--resample, --rinstat, or --rinstat-json)"
+                "Please specify an operation (--resample, --rinstat, --rinstat-json, or --convert-name)"
             )
             return RinexParserResult(None, None)
     except Exception as e:
@@ -433,6 +616,16 @@ def main() -> int:
         for handler in logger.handlers:
             handler.setLevel(logging.DEBUG)
         logger.setLevel(logging.DEBUG)
+
+    if args.convert_name:
+        if args.merge:
+            logger.error("--merge is not supported with --convert-name")
+            return 1
+        return process_convert_name(args)
+
+    if not args.rinex_files:
+        logger.error("No input files provided")
+        return 1
 
     parse_queue = queue.Queue()
     parse_threads: List[threading.Thread] = []
