@@ -164,12 +164,19 @@ class RinexParser:
         period = f"{unitCount:02d}{unitPeriod}"
         return period, unitCount
 
-    def get_rx3_long(self, country: str = "XXX", ts_source: str = "epoch") -> str:
+    def get_rx3_long(
+        self,
+        country: str = "XXX",
+        ts_source: str = "epoch",
+        origin: Optional[str] = None,
+    ) -> str:
         """
         Generate a long RINEX 3 filename based on the observation data.
         Args:
             country: Country code for the filename (default "XXX").
             ts_source: Source of timestamp for filename ("epoch" or "header").
+            origin: Data origin character, "R" (recorded) or "S" (stream).
+                    When None, derived from input filename or defaults to "S".
         Returns:
             str: Generated RINEX 3 filename.
         """
@@ -183,16 +190,24 @@ class RinexParser:
         period, _ = self.get_period(ts_f, ts_l)
         dtF = ts_to_datetime(ts_f)
         doy = int(dtF.strftime("%03j"))
-        rinex_origin = "S"
+        rinex_origin = origin.upper() if origin and origin.upper() in ("R", "S") else "S"
         rinex_path = os.path.basename(self.rinex_file)
         monument_id = self.rinex_reader.header.monument_id or "0"
         receiver_id = self.rinex_reader.header.receiver_id or "0"
 
-        country = self.rinex_reader.header.get_country_from_filename(self.rinex_file)
+        country_from_name = self.rinex_reader.header.get_country_from_filename(
+            self.rinex_file
+        )
+        if country and country.upper().ljust(3, "X")[:3] != "XXX":
+            country = country.upper().ljust(3, "X")[:3]
+        elif self.rinex_reader.header.country and self.rinex_reader.header.country.upper().ljust(3, "X")[:3] != "XXX":
+            country = self.rinex_reader.header.country.upper().ljust(3, "X")[:3]
+        else:
+            country = country_from_name
 
         if len(rinex_path) > 32:
-            # get data origin
-            if rinex_path[10] in ["R", "S"]:
+            # get data origin from filename only when not explicitly provided
+            if origin is None and rinex_path[10] in ["R", "S"]:
                 rinex_origin = rinex_path[10]
             # get country
             if country.upper().ljust(3, "X")[:3] == "XXX":
