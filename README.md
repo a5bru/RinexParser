@@ -84,6 +84,42 @@ rxp --rinstat-json station.rnx
 rxp --rinstat *.rnx.gz
 ```
 
+### Convert to RINEX 3 long filenames
+
+Detect RINEX content version and generate compliant RINEX 3 long filenames.
+Dry-run is the default behavior, so no rename happens unless `--apply` is set.
+
+```bash
+# Dry-run a single file (prints source -> target mapping)
+rxp --convert-name station.obs
+
+# Apply rename on disk
+rxp --convert-name --apply station.obs
+
+# Batch conversion from directory
+rxp --convert-name --input-dir ./rinex
+
+# Recursive directory scan
+rxp --convert-name --input-dir ./rinex --recursive
+
+# Mixed input: explicit files plus directories
+rxp --convert-name --input-dir ./rinex station1.rnx station2.obs.gz
+
+# Set default country fallback via CLI
+rxp --convert-name --default-country AUT amst058e.26o
+```
+
+Behavior summary:
+- Only content-version 3 files are converted.
+- Content-version 2 files are skipped with status output.
+- Already compliant names are reported as no-op.
+- Name collisions are skipped for safety.
+
+Default country fallback precedence:
+- `--default-country CCC` (highest priority)
+- `RXP_DEFAULT_COUNTRY=CCC` environment variable
+- `.env` entry: `RXP_DEFAULT_COUNTRY=CCC` (or `DEFAULT_COUNTRY=CCC`)
+
 ### Crop observations by time window
 
 Extract observations from a specific time period:
@@ -194,10 +230,10 @@ rxp --resample 30 --profile station.rnx
 The help of rxp shows the following output:
 
 ```
-usage: rxp [-h] [--resample SECONDS] [--rinstat] [--rinstat-json] [-o FILE] [-v] [--show-output] [--crop-start DATETIME] [--crop-end DATETIME]
+usage: rxp [-h] [--resample SECONDS | --rinstat | --rinstat-json | --convert-name] [--apply] [--input-dir DIR] [--recursive] [-o FILE] [-v] [--show-output] [--crop-start DATETIME] [--crop-end DATETIME]
            [--filter-sat-pnr FILTER_SAT_PNR] [--filter-sat-sys FILTER_SAT_SYS] [--filter-sat-obs FILTER_SAT_OBS] [-t SKELETON]
            [-m] [-n THREADS] [--profile] [--version]
-           rinex_files [rinex_files ...]
+           [rinex_files ...]
 
 RINEX observation file parser and processor
 
@@ -209,6 +245,10 @@ options:
   --resample SECONDS    Resample observations to specified interval (seconds)
   --rinstat             Generate RINSTAT quality report
   --rinstat-json        Generate RINSTAT quality report in JSON format
+  --convert-name        Convert RINEX v3 files to compliant RINEX 3 long filenames
+  --apply               Apply filename conversion on disk (default is dry-run)
+  --input-dir DIR       Directory to scan for RINEX files in convert-name mode (repeatable)
+  --recursive           Recursively scan directories in convert-name mode
   -o, --output FILE     Output filename (auto-generated if not specified)
   -v, --verbose         Enable verbose logging
   --show-output         Print the generated output to console
