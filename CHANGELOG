@@ -96,3 +96,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADD: merge files per station
 - ADD: filter rinex by sat sys, pnr, obs types
 - FIX: hatanaka compressions  complained about end of line
+
+## 1.2.3 - 2026-04-20
+- FIX: entrypoint rxp --convert-name
+
+## hotfix/260511 - 2026-05-11
+- FIX: error in f-strings
+- FIX: no interval information in header -> use first two epochs or "1" 
