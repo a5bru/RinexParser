@@ -76,7 +76,9 @@ class RinexObsHeader(abc.ABC):
         self.wavelength_fact_l2: Optional[int] = kwargs.get("wavelength_fact_l2")
         self.wavelength_fact: Optional[int] = kwargs.get("wavelength_fact")
         self.observation_types: List[str] = kwargs.get("observation_types", [])
-        self.interval: Optional[int] = kwargs.get("interval")
+        # Keep interval numeric even when INTERVAL header is missing.
+        # A value <= 0 signals "unknown" and can be inferred from epochs later.
+        self.interval: float = float(kwargs.get("interval", 0.0) or 0.0)
         self.first_observation: Optional[float] = kwargs.get("first_observation")
         self.last_observation: Optional[float] = kwargs.get("last_observation")
         self.time_system: Optional[str] = kwargs.get("time_system")
@@ -294,7 +296,11 @@ class RinexObsHeader(abc.ABC):
         Args:
             line: Header line containing interval information.
         """
-        self.interval = int(float(line.split()[0].strip()))
+        try:
+            self.interval = float(line.split()[0].strip())
+        except Exception:
+            logger.warning("Could not parse INTERVAL header; using 0.0")
+            self.interval = 0.0
 
     def set_version_type(self, line: str) -> None:
         """Parse and set RINEX version and type from header line.
@@ -887,7 +893,11 @@ class Rinex3ObsHeader(Rinex2ObsHeader):
         self.signal_strength_unit = line[:20].strip()
 
     def set_interval(self, line):
-        self.interval = float(line[:10])
+        try:
+            self.interval = float(line[:10])
+        except Exception:
+            logger.warning("Could not parse INTERVAL header; using 0.0")
+            self.interval = 0.0
 
     def set_sys_dcbs_applied(self, line):
         satellite_system = line[0]

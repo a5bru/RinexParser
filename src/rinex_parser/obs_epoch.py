@@ -446,7 +446,9 @@ class RinexEpoch:
         if prn2:
             header_line += prn2
 
-        return f"{header_line}\n{'\n'.join(data_lines)}"
+        data_lines_str = "\n".join(data_lines)
+        r_epoch = "%s\n%s" % header_line, data_lines_str
+        return r_epoch
 
     def from_rinex2(self, rinex: str) -> None:
         """Parse epoch from RINEX 2 format string.

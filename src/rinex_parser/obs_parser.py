@@ -223,8 +223,20 @@ class RinexParser:
         smp = self.rinex_reader.header.interval
         if self.sampling > 0:
             smp = self.sampling
-        smp = int(smp)
-        logger.info(f"Sampling interval for filename: {smp} seconds")
+        elif smp is None or float(smp) <= 0:
+            # Fallback when INTERVAL header is missing/invalid.
+            if len(self.rinex_reader.rinex_epochs) > 1:
+                smp = (
+                    self.rinex_reader.rinex_epochs[1].timestamp
+                    - self.rinex_reader.rinex_epochs[0].timestamp
+                )
+                logger.info("Sampling interval derived from first two epochs")
+            else:
+                smp = 1            
+        smp = int(round(float(smp)))
+        if smp <= 0:
+            smp = 1
+        logger.info(f"Sampling interval for filename: {smp} second(s)")
         return f"{code}{monument_id}{receiver_id}{country}_{rinex_origin}_{dtF.year:04d}{doy:03d}{dtF.hour:02d}{dtF.minute:02d}_{period}_{smp:02d}S_MO.rnx"
 
     def get_datadict(self):
